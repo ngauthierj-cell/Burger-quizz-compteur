@@ -812,7 +812,12 @@
         ctx = new AC();
         preloadClips(ctx);
       }
-      if (ctx.state === "suspended") ctx.resume();
+      // iPhone : après un appel ou une veille, l'état peut être « interrupted » ;
+      // on relance dès que le contexte ne tourne pas.
+      if (ctx.state !== "running") {
+        var r = ctx.resume();
+        if (r && r.catch) r.catch(function () {});
+      }
       return ctx;
     } catch (e) { return null; }
   }
@@ -1251,7 +1256,11 @@
   });
 
   var root = document.documentElement;
-  var canFs = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  // Le navigateur peut connaître le plein écran mais l'interdire (appli, cadre
+  // intégré, certains téléphones) : on cache alors le bouton.
+  var fsAllowed = ("fullscreenEnabled" in document) ? document.fullscreenEnabled
+    : document.webkitFullscreenEnabled;
+  var canFs = !!(root.requestFullscreen || root.webkitRequestFullscreen) && !!fsAllowed;
   if (!canFs) els.fs.hidden = true;
   function toggleFs() {
     try {
@@ -1261,9 +1270,9 @@
       } else {
         var req = root.requestFullscreen || root.webkitRequestFullscreen;
         var res = req.call(root);
-        if (res && res.catch) res.catch(function () {});
+        if (res && res.catch) res.catch(function () { els.fs.hidden = true; });
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { els.fs.hidden = true; }
   }
   els.fs.addEventListener("click", toggleFs);
 
@@ -1292,8 +1301,9 @@
       return;
     }
     var k = e.key.toLowerCase();
-    if (k === "k") addPoints("ketchup", e.shiftKey ? -1 : 1);
-    else if (k === "m") addPoints("mayo", e.shiftKey ? -1 : 1);
+    var inBdm = state.round === BDM_INDEX;
+    if (k === "k") { if (!inBdm) addPoints("ketchup", e.shiftKey ? -1 : 1); }
+    else if (k === "m") { if (!inBdm) addPoints("mayo", e.shiftKey ? -1 : 1); }
     else if (e.key === "ArrowLeft") setRound(state.round - 1);
     else if (e.key === "ArrowRight") setRound(state.round + 1);
     else if (k === "s") els.sound.click();
