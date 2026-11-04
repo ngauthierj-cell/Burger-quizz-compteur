@@ -1,8 +1,8 @@
 // Fait fonctionner l'appli hors ligne une fois installée.
 // Stratégie : on répond tout de suite avec la version en mémoire, et on va chercher
 // une éventuelle mise à jour en arrière-plan pour le prochain lancement.
-const CACHE = "miams-v2";
-const FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-180.png", "icons/icon-32.png"];
+const CACHE = "miams-v3";
+const FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-180.png", "icons/icon-32.png", "icons/icon-maskable-192.png", "icons/icon-maskable-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
