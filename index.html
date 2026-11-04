@@ -929,6 +929,66 @@
     tone(ac, "square", 110, t, 0.6, 0.12, 40);
   }
 
+  // Nouvelle partie : grésillement de friteuse puis « ding » de minuterie.
+  // Sortie plus brillante que celle du buzzer (le grésillement est dans les aigus).
+  var brightNode = null;
+  function bright(ac) {
+    if (!brightNode) {
+      var comp = ac.createDynamicsCompressor();
+      var lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 6000;
+      lp.connect(comp).connect(ac.destination);
+      brightNode = lp;
+    }
+    return brightNode;
+  }
+  var noiseBuf = null;
+  function noise(ac, out, t, dur, vol, type, freq, q, attack) {
+    if (!noiseBuf) {
+      noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var j = 0; j < d.length; j++) d[j] = Math.random() * 2 - 1;
+    }
+    var src = ac.createBufferSource();
+    src.buffer = noiseBuf;
+    var f = ac.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q || 1;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + (attack || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(out);
+    src.start(t, Math.random());
+    src.stop(t + dur + 0.05);
+  }
+  function bell(ac, out, freq, t, vol, decay) {
+    [[1, 1], [2.76, 0.5], [5.4, 0.25], [8.93, 0.12]].forEach(function (p) {
+      var o = ac.createOscillator();
+      var g = ac.createGain();
+      o.type = "sine";
+      o.frequency.value = freq * p[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol * p[1], t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay / Math.sqrt(p[0]));
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + decay + 0.1);
+    });
+  }
+  function fryer() {
+    var ac = audio(); if (!ac) return;
+    var out = bright(ac);
+    var t = ac.currentTime + 0.02;
+    noise(ac, out, t, 1.0, 0.35, "highpass", 3500, 0.7, 0.15);
+    for (var k = 0; k < 14; k++) {
+      noise(ac, out, t + 0.03 + Math.random() * 0.9, 0.03, 0.25, "bandpass", 4000 + Math.random() * 3000, 4);
+    }
+    bell(ac, out, 2093, t + 0.98, 0.35, 0.9);
+  }
+
   /* ---------- DOM ---------- */
   var $ = function (id) { return document.getElementById(id); };
   var els = {
@@ -1143,6 +1203,7 @@
     state.muted = keepMuted;
     save();
     render();
+    fryer();
     toast("C'est reparti\u00a0!");
   }
 
