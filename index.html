@@ -45,6 +45,8 @@
 
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  /* Pas de zoom quand on tape deux fois vite (le pincement reste possible) */
+  html { touch-action: manipulation; }
 
   body {
     margin: 0;
@@ -278,6 +280,8 @@
     gap: clamp(6px, 1.2vmin, 14px);
   }
   .pad button {
+    min-width: 0;
+    padding: 0;
     min-height: clamp(56px, 11vmin, 130px);
     border: 0;
     border-radius: clamp(8px, 1.4vmin, 16px);
@@ -332,7 +336,7 @@
 
   /* Portrait étroit : boutons empilés */
   @media (max-width: 560px) and (orientation: portrait) {
-    .pad { grid-template-columns: 1fr 1fr 1fr; }
+    .pad { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .pad .plus1 { grid-column: 1 / -1; }
     .team-name { font-size: clamp(18px, 6vw, 30px); }
     .score { font-size: clamp(76px, 25vw, 200px); }
@@ -572,8 +576,10 @@
     .tools { gap: 6px; }
     .icon-btn { width: 40px; height: 40px; }
     .footer { flex-wrap: wrap; }
-    .footer-actions { flex: 1 1 100%; }
-    .footer-actions button { flex: 1; }
+    .footer-actions { flex: 1 1 100%; flex-wrap: wrap; }
+    .footer-actions button { flex: 1 1 auto; }
+    .sign { flex-wrap: wrap; row-gap: 6px; }
+    .round-name { overflow-wrap: anywhere; }
   }
 
   /* Paysage sur petit écran (téléphone couché) : tout doit tenir sans défiler */
