@@ -921,12 +921,6 @@
     tone(ac, "square", 1319, t + 0.55, 0.7, 0.07);
     tone(ac, "triangle", 523, t + 0.55, 0.7, 0.14);
   }
-  function crash() {
-    var ac = audio(); if (!ac) return;
-    var t = ac.currentTime;
-    tone(ac, "sawtooth", 220, t, 0.6, 0.16, 55);
-    tone(ac, "square", 110, t, 0.6, 0.12, 40);
-  }
 
   /* ---------- DOM ---------- */
   var $ = function (id) { return document.getElementById(id); };
@@ -1054,18 +1048,12 @@
     save();
     render();
     restart(els.bdmCount, delta > 0 ? "bump" : "dip");
-    if (delta > 0) {
-      if (after === 10) {
-        fanfare();
-        celebrate("Grand Burger\u00a0!", TEAMS[state.bdm.team] + " a dévoré les 10 questions\u00a0!", false);
-      } else if (after === 5) {
-        cheer(state.bdm.team, 3);
-        toast("Petit Burger\u00a0!");
-      } else {
-        cheer(state.bdm.team, 1);
-      }
-    } else {
-      blip();
+    // Burger de la Mort : silence pendant la manche, seule la victoire à 10 sonne.
+    if (after === 10 && delta > 0) {
+      fanfare();
+      celebrate("Grand Burger\u00a0!", TEAMS[state.bdm.team] + " a dévoré les 10 questions\u00a0!", false);
+    } else if (after === 5 && delta > 0) {
+      toast("Petit Burger\u00a0!");
     }
   }
 
@@ -1075,7 +1063,6 @@
     save();
     render();
     restart(els.bdmCount, "dip");
-    crash();
     toast("Le Burger s'écroule\u00a0!");
   }
 
