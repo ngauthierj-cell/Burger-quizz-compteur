@@ -129,6 +129,7 @@
   .icon-btn svg { width: 52%; height: 52%; }
   .icon-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.5); }
   .icon-btn[hidden] { display: none; }
+  .awake-btn.on { background: var(--jaune); }
 
   /* ---------- Manches (bandeau d'origine, aux couleurs de la boîte) ---------- */
   .rounds {
@@ -558,6 +559,10 @@
   }
   /* Très petits écrans (moins de 380 px) : les boutons passent sur une seconde ligne */
   @media (max-width: 379px) and (orientation: portrait) {
+    .brand-tiles { font-size: 22px; flex-wrap: nowrap; }
+    .brand-kicker { font-size: 11px; }
+    .tools { gap: 6px; }
+    .icon-btn { width: 40px; height: 40px; }
     .footer { flex-wrap: wrap; }
     .footer-actions { flex: 1 1 100%; }
     .footer-actions button { flex: 1; }
@@ -778,6 +783,14 @@
           <path class="mute" d="M16 9l6 6M22 9l-6 6" style="display:none"/>
         </svg>
       </button>
+      <button class="icon-btn awake-btn" id="awakeBtn" aria-label="Garder l'écran allumé" title="Garder l'écran allumé (E)" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="2.5" width="12" height="19" rx="2.5"/>
+          <circle class="sun" cx="12" cy="11" r="2.6" fill="currentColor"/>
+          <path class="rays" d="M12 5.8v1.2M12 15v1.2M7.8 11H9M15 11h1.2"/>
+          <path class="moon" d="M13.4 8.6a3 3 0 1 0 1.9 4.4 2.4 2.4 0 0 1-1.9-4.4z" fill="currentColor" style="display:none"/>
+        </svg>
+      </button>
       <button class="icon-btn" id="fsBtn" aria-label="Plein écran" title="Plein écran (F)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
@@ -863,7 +876,7 @@
       <span class="goal-unit">Miams</span>
     </label>
     <div class="hint">
-      <kbd>K</kbd>/<kbd>M</kbd> +1 · <kbd>⇧</kbd>+<kbd>K</kbd>/<kbd>M</kbd> −1 · <kbd>←</kbd><kbd>→</kbd> manche · <kbd>Espace</kbd> Burger +1
+      <kbd>K</kbd>/<kbd>M</kbd> +1 · <kbd>⇧</kbd>+<kbd>K</kbd>/<kbd>M</kbd> −1 · <kbd>←</kbd><kbd>→</kbd> manche · <kbd>Espace</kbd> Burger +1 · <kbd>E</kbd> écran allumé
     </div>
     <div class="footer-actions">
       <button class="recap-btn" id="recapBtn">Récap</button>
@@ -937,7 +950,8 @@
       round: 0,
       bdm: { count: 0, team: "ketchup", best: { ketchup: 0, mayo: 0 } },
       perRound: { ketchup: [0, 0, 0, 0, 0], mayo: [0, 0, 0, 0, 0] },
-      muted: false
+      muted: false,
+      keepAwake: true
     };
   };
 
@@ -970,6 +984,7 @@
             });
           }
           s.muted = !!d.muted;
+          if (typeof d.keepAwake === "boolean") s.keepAwake = d.keepAwake;
         }
       }
     } catch (e) { /* stockage indisponible : on part des valeurs par défaut */ }
@@ -1211,7 +1226,7 @@
   var els = {
     roundLabel: $("roundLabel"), roundName: $("roundName"), roundHint: $("roundHint"), dots: $("dots"),
     prev: $("prevRound"), next: $("nextRound"),
-    goal: $("goalInput"), sound: $("soundBtn"), fs: $("fsBtn"),
+    goal: $("goalInput"), sound: $("soundBtn"), fs: $("fsBtn"), awake: $("awakeBtn"),
     bdmCount: $("bdmCount"), stack: $("stack"), bdmStatus: $("bdmStatus"),
     toast: $("toast"), confirm: $("confirmOverlay"), win: $("winOverlay"), recap: $("recapOverlay"), confetti: $("confetti")
   };
@@ -1497,10 +1512,11 @@
   }
 
   function newGame() {
-    var keepGoal = state.goal, keepMuted = state.muted;
+    var keepGoal = state.goal, keepMuted = state.muted, keepAwake = state.keepAwake;
     state = defaults();
     state.goal = keepGoal;
     state.muted = keepMuted;
+    state.keepAwake = keepAwake;
     save();
     render();
     fryer();
@@ -1542,6 +1558,66 @@
   els.goal.addEventListener("keydown", function (e) {
     if (e.key === "Enter") { els.goal.blur(); }
   });
+
+  /* ---------- Écran toujours allumé (Screen Wake Lock) ----------
+     Le verrou est relâché par le navigateur dès que la page est cachée
+     (autre onglet, autre appli, écran verrouillé) : on le redemande au retour. */
+  var wakeSupported = "wakeLock" in navigator;
+  var wakeLock = null;
+  var wakePending = false;
+  var wakeRefused = false;
+  function renderAwake() {
+    var b = els.awake;
+    b.hidden = !wakeSupported || wakeRefused;
+    var on = state.keepAwake && !!wakeLock;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(state.keepAwake));
+    b.querySelector(".sun").style.display = state.keepAwake ? "" : "none";
+    b.querySelector(".rays").style.display = state.keepAwake ? "" : "none";
+    b.querySelector(".moon").style.display = state.keepAwake ? "none" : "";
+    b.setAttribute("aria-label", state.keepAwake ? "Écran toujours allumé (appuyer pour autoriser la veille)" : "Mise en veille autorisée (appuyer pour garder l'écran allumé)");
+  }
+  function acquireWake() {
+    if (!wakeSupported || wakeRefused || !state.keepAwake || wakeLock || wakePending) return;
+    if (document.visibilityState !== "visible") return;
+    wakePending = true;
+    try {
+      navigator.wakeLock.request("screen").then(function (lock) {
+        wakePending = false;
+        if (!state.keepAwake) { lock.release().catch(function () {}); return; }
+        wakeLock = lock;
+        lock.addEventListener("release", function () { if (wakeLock === lock) wakeLock = null; renderAwake(); });
+        renderAwake();
+      }).catch(function (err) {
+        wakePending = false;
+        // Interdit pour cette page (cadre intégré, réglage du navigateur) : on cache le bouton.
+        if (err && err.name === "NotAllowedError" && document.visibilityState === "visible" && userActed) {
+          wakeRefused = true;
+          renderAwake();
+        }
+      });
+    } catch (e) { wakePending = false; }
+  }
+  function releaseWake() {
+    if (wakeLock) { var l = wakeLock; wakeLock = null; l.release().catch(function () {}); }
+    renderAwake();
+  }
+  // Certains navigateurs n'accordent le verrou qu'après un premier appui
+  var userActed = false;
+  document.addEventListener("pointerdown", function () { userActed = true; acquireWake(); }, true);
+  document.addEventListener("keydown", function () { userActed = true; acquireWake(); }, true);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") acquireWake();
+  });
+  els.awake.addEventListener("click", function () {
+    state.keepAwake = !state.keepAwake;
+    save();
+    if (state.keepAwake) { acquireWake(); toast("Écran toujours allumé"); }
+    else { releaseWake(); toast("Veille autorisée"); }
+    renderAwake();
+  });
+  renderAwake();
+  acquireWake();
 
   els.sound.addEventListener("click", function () {
     state.muted = !state.muted;
@@ -1607,6 +1683,7 @@
     else if (e.key === "ArrowLeft") setRound(state.round - 1);
     else if (e.key === "ArrowRight") setRound(state.round + 1);
     else if (k === "s") els.sound.click();
+    else if (k === "e" && !els.awake.hidden) els.awake.click();
     else if (k === "f" && canFs) toggleFs();
     else if (e.key === " " && state.round === BDM_INDEX) {
       if (document.activeElement && document.activeElement.tagName === "BUTTON") return;
