@@ -850,6 +850,45 @@
       tone(ac, "square", base * 2, t + 0.3, 0.42, 0.12);
     }
   }
+
+  // Voix de supporters (synthèse vocale du navigateur) :
+  // Ketchup = gros « Ouais ! » grave et traînant, Mayo = « Yeah! » aigu et survolté.
+  var VOICES = {
+    ketchup: { lang: "fr", text: "Ouais !", big: "Ouais ouais ouais !", pitch: 0.1, rate: 0.75 },
+    mayo: { lang: "en", text: "Yeah!", big: "Yeah yeah yeah!", pitch: 2, rate: 1.5 }
+  };
+  var synth = window.speechSynthesis || null;
+  function pickVoice(lang) {
+    try {
+      var list = synth.getVoices() || [];
+      var same = list.filter(function (v) { return (v.lang || "").toLowerCase().indexOf(lang) === 0; });
+      if (!same.length) return null;
+      // Préfère une voix locale (fonctionne hors ligne et répond plus vite)
+      return same.filter(function (v) { return v.localService; })[0] || same[0];
+    } catch (e) { return null; }
+  }
+  if (synth) {
+    try { synth.getVoices(); synth.onvoiceschanged = function () { synth.getVoices(); }; } catch (e) { /* ignore */ }
+  }
+  function cheer(team, big) {
+    if (state.muted) return;
+    if (!synth || !window.SpeechSynthesisUtterance) { buzz(team, big); return; }
+    try {
+      var cfg = VOICES[team];
+      var u = new SpeechSynthesisUtterance(big ? cfg.big : cfg.text);
+      var v = pickVoice(cfg.lang);
+      if (v) u.voice = v;
+      u.lang = v ? v.lang : (cfg.lang === "fr" ? "fr-FR" : "en-US");
+      u.pitch = cfg.pitch;
+      u.rate = cfg.rate;
+      u.volume = 1;
+      synth.cancel(); // un nouveau point coupe le cri précédent
+      synth.speak(u);
+    } catch (e) {
+      buzz(team, big);
+    }
+  }
+
   function blip() {
     var ac = audio(); if (!ac) return;
     tone(ac, "triangle", 300, ac.currentTime, 0.18, 0.15, 150);
@@ -955,7 +994,7 @@
     if (delta > 0) {
       restart(scoreEl, "bump");
       floatText(team, "+" + delta);
-      buzz(team, delta >= 5);
+      cheer(team, delta >= 5);
       if (before < state.goal && after >= state.goal) {
         setTimeout(function () { victory(team); }, 350);
       }
@@ -1003,10 +1042,10 @@
         fanfare();
         celebrate("Grand Burger\u00a0!", TEAMS[state.bdm.team] + " a dévoré les 10 questions\u00a0!", false);
       } else if (after === 5) {
-        buzz(state.bdm.team, true);
+        cheer(state.bdm.team, true);
         toast("Petit Burger\u00a0!");
       } else {
-        buzz(state.bdm.team, false);
+        cheer(state.bdm.team, false);
       }
     } else {
       blip();
@@ -1134,7 +1173,7 @@
     state.muted = !state.muted;
     save();
     render();
-    if (!state.muted) buzz("mayo", false);
+    if (!state.muted) cheer("ketchup", false);
   });
 
   var root = document.documentElement;
