@@ -1,11 +1,16 @@
 // Fait fonctionner l'appli hors ligne une fois installée.
 // Stratégie : on répond tout de suite avec la version en mémoire, et on va chercher
 // une éventuelle mise à jour en arrière-plan pour le prochain lancement.
-const CACHE = "miams-v3";
+const CACHE = "miams-v4";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-180.png", "icons/icon-32.png", "icons/icon-maskable-192.png", "icons/icon-maskable-512.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
+  // « reload » : on télécharge les fichiers frais, sans passer par le cache du navigateur
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(FILES.map((url) => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -22,7 +27,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(req, { ignoreSearch: true }).then((cached) => {
-        const update = fetch(req)
+        const update = fetch(req, { cache: "no-cache" })
           .then((res) => {
             if (res && res.ok) cache.put(req, res.clone());
             return res;
