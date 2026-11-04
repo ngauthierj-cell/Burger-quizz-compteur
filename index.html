@@ -511,6 +511,7 @@
     .footer { padding: 4px 12px; }
     .goal, .new-game { font-size: 14px; }
     .new-game { padding: 8px 16px; }
+    .recap-btn { font-size: 14px; padding: 5px 14px; border-width: 2px; }
     .bdm-panel { padding: 8px 12px; gap: 6px; }
     .bdm-title { font-size: 20px; }
     .bdm-count { font-size: 64px; }
@@ -588,6 +589,112 @@
   @keyframes fall {
     to { transform: translate3d(var(--dx), 110vh, 0) rotate(var(--rot)); }
   }
+
+  /* Annonce de manche : grande enseigne qui surgit puis s'efface */
+  .announce {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .announce.show { visibility: visible; }
+  .announce-plate {
+    max-width: 100%;
+    text-align: center;
+    background: var(--ketchup);
+    color: var(--cream);
+    border-radius: var(--radius);
+    padding: clamp(14px, 3vmin, 40px) clamp(24px, 6vmin, 80px);
+    box-shadow: 0 0 0 6px var(--cream), 0 0 0 12px var(--ketchup-dark), 0 30px 80px rgba(0,0,0,.6);
+    opacity: 0;
+  }
+  .announce.show .announce-plate { animation: announce 2.3s cubic-bezier(.3,1.4,.5,1) forwards; }
+  @keyframes announce {
+    0% { opacity: 0; transform: scale(.5) rotate(-6deg); }
+    14% { opacity: 1; transform: scale(1.06) rotate(-2deg); }
+    22% { transform: scale(1) rotate(-2deg); }
+    82% { opacity: 1; transform: scale(1) rotate(-2deg); }
+    100% { opacity: 0; transform: scale(1.1) rotate(-2deg); }
+  }
+  .announce-num {
+    font-size: clamp(16px, 3.4vmin, 44px);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--mustard);
+  }
+  .announce-name {
+    font-size: clamp(38px, 11vmin, 150px);
+    line-height: 1;
+    text-wrap: balance;
+    text-shadow: 0 .06em 0 var(--ketchup-dark);
+  }
+
+  /* Récap de fin de partie */
+  .recap-card { width: min(100%, 760px); max-height: calc(100% - 8px); overflow-y: auto; }
+  .recap-lead { font-size: clamp(20px, 4vmin, 46px) !important; color: var(--ink); margin-bottom: .2em !important; }
+  .recap-diff {
+    font-family: system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(14px, 2.4vmin, 26px) !important;
+    color: #6b5444;
+  }
+  .recap {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    font-size: clamp(16px, 2.8vmin, 32px);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 1em;
+  }
+  .recap th, .recap td { padding: .35em .6em; }
+  .recap thead th { font-size: .7em; letter-spacing: .12em; text-transform: uppercase; color: #6b5444; }
+  .recap thead th.k { color: var(--ketchup); }
+  .recap thead th.m { color: #a8862a; }
+  .recap tbody th { text-align: left; }
+  .recap td { text-align: center; width: 24%; border-radius: 12px; }
+  .recap tbody tr { background: #f3e9cf; }
+  .recap tbody tr > :first-child { border-radius: 12px 0 0 12px; }
+  .recap tbody tr > :last-child { border-radius: 0 12px 12px 0; }
+  .recap td.win-k { background: var(--ketchup); color: var(--cream); }
+  .recap td.win-m { background: var(--mayo-dark); color: var(--brown); }
+  .recap tr.total { background: #e8dcc0; font-size: 1.15em; }
+  .recap tr.muted { opacity: .65; }
+  .recap-card h3 { margin: 0 0 .4em; font-size: clamp(16px, 2.8vmin, 30px); color: var(--ketchup); }
+  .recap-bdm { list-style: none; margin: 0 0 1em; padding: 0; display: grid; gap: 6px; font-size: clamp(15px, 2.6vmin, 28px); }
+  .recap-bdm .dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .5em; vertical-align: baseline; }
+  .recap-bdm .dot.ketchup { background: var(--ketchup); }
+  .recap-bdm .dot.mayo { background: var(--mayo-dark); }
+
+  .footer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* Téléphone en portrait : objectif et boutons sur une seule ligne */
+  @media (max-width: 560px) and (orientation: portrait) {
+    .footer { flex-wrap: nowrap; gap: 8px; padding-inline: 12px; }
+    .goal { font-size: 15px; gap: 6px; }
+    .goal input { width: 2.8em; }
+    .goal-unit { display: none; }
+    .footer-actions { flex-wrap: nowrap; gap: 6px; }
+    .recap-btn, .new-game { font-size: 14px; padding: 9px 12px; white-space: nowrap; }
+    .recap-btn { padding: 7px 10px; }
+  }
+  /* Très petits écrans (moins de 380 px) : les boutons passent sur une seconde ligne */
+  @media (max-width: 379px) and (orientation: portrait) {
+    .footer { flex-wrap: wrap; }
+    .footer-actions { flex: 1 1 100%; }
+    .footer-actions button { flex: 1; }
+  }
+  .recap-btn {
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    padding: clamp(7px, 1.3vmin, 15px) clamp(16px, 2.6vmin, 32px);
+    font-size: clamp(15px, 2.4vmin, 30px);
+    background: transparent;
+    color: var(--ink);
+  }
+  .recap-btn:active { transform: translateY(2px); }
 
   .toast {
     position: fixed;
@@ -707,12 +814,15 @@
   <footer class="footer">
     <label class="goal">Objectif
       <input id="goalInput" type="number" inputmode="numeric" min="1" max="999" value="25" aria-label="Objectif en Miams">
-      Miams
+      <span class="goal-unit">Miams</span>
     </label>
     <div class="hint">
       <kbd>K</kbd>/<kbd>M</kbd> +1 · <kbd>⇧</kbd>+<kbd>K</kbd>/<kbd>M</kbd> −1 · <kbd>←</kbd><kbd>→</kbd> manche · <kbd>Espace</kbd> Burger +1
     </div>
-    <button class="new-game" id="newGame">Nouvelle partie</button>
+    <div class="footer-actions">
+      <button class="recap-btn" id="recapBtn">Récap</button>
+      <button class="new-game" id="newGame">Nouvelle partie</button>
+    </div>
   </footer>
 </div>
 
@@ -729,6 +839,23 @@
   </div>
 </div>
 
+<div class="announce" id="announce" aria-hidden="true">
+  <div class="announce-plate">
+    <div class="announce-num" id="announceNum">Manche 1</div>
+    <div class="announce-name" id="announceName">Nuggets</div>
+  </div>
+</div>
+
+<div class="overlay" id="recapOverlay" role="dialog" aria-modal="true" aria-labelledby="recapTitle">
+  <div class="card recap-card">
+    <h2 id="recapTitle">Le récap</h2>
+    <div id="recapBody"></div>
+    <div class="actions">
+      <button class="btn-main" id="recapClose">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="winOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle">
   <div class="confetti" id="confetti"></div>
   <div class="card win-card">
@@ -737,6 +864,7 @@
     <div class="actions">
       <button class="btn-alt" id="winStay">Continuer</button>
       <button class="btn-main" id="winGo">Au Burger de la Mort</button>
+      <button class="btn-main" id="winRecap" style="display:none">Voir le récap</button>
     </div>
   </div>
 </div>
@@ -761,7 +889,8 @@
       scores: { ketchup: 0, mayo: 0 },
       goal: 25,
       round: 0,
-      bdm: { count: 0, team: "ketchup" },
+      bdm: { count: 0, team: "ketchup", best: { ketchup: 0, mayo: 0 } },
+      perRound: { ketchup: [0, 0, 0, 0, 0], mayo: [0, 0, 0, 0, 0] },
       muted: false
     };
   };
@@ -783,6 +912,16 @@
           if (d.bdm) {
             s.bdm.count = clampInt(d.bdm.count, 0, 10, 0);
             s.bdm.team = d.bdm.team === "mayo" ? "mayo" : "ketchup";
+            if (d.bdm.best) {
+              s.bdm.best.ketchup = clampInt(d.bdm.best.ketchup, 0, 10, 0);
+              s.bdm.best.mayo = clampInt(d.bdm.best.mayo, 0, 10, 0);
+            }
+          }
+          if (d.perRound) {
+            ["ketchup", "mayo"].forEach(function (t) {
+              var arr = d.perRound[t] || [];
+              for (var i = 0; i < ROUNDS.length; i++) s.perRound[t][i] = clampInt(arr[i], -9999, 9999, 0);
+            });
           }
           s.muted = !!d.muted;
         }
@@ -983,6 +1122,16 @@
       o.stop(t + decay + 0.1);
     });
   }
+  // Changement de manche : carillon de quatre notes qui montent.
+  function chime() {
+    var ac = audio(); if (!ac) return;
+    var out = bright(ac);
+    var t = ac.currentTime + 0.02;
+    [[1047, 0], [1319, 0.22], [1568, 0.44], [2093, 0.66]].forEach(function (n) {
+      bell(ac, out, n[0], t + n[1], 0.3, 1.2);
+    });
+  }
+
   function fryer() {
     var ac = audio(); if (!ac) return;
     var out = bright(ac);
@@ -1001,7 +1150,7 @@
     prev: $("prevRound"), next: $("nextRound"),
     goal: $("goalInput"), sound: $("soundBtn"), fs: $("fsBtn"),
     bdmCount: $("bdmCount"), stack: $("stack"), bdmStatus: $("bdmStatus"),
-    toast: $("toast"), confirm: $("confirmOverlay"), win: $("winOverlay"), confetti: $("confetti")
+    toast: $("toast"), confirm: $("confirmOverlay"), win: $("winOverlay"), recap: $("recapOverlay"), confetti: $("confetti")
   };
 
   ROUNDS.forEach(function () { els.dots.appendChild(document.createElement("i")); });
@@ -1071,6 +1220,7 @@
     var after = Math.max(0, Math.min(9999, before + delta));
     if (after === before) return;
     state.scores[team] = after;
+    state.perRound[team][state.round] += after - before;
     save();
     render();
     var scoreEl = $("score-" + team);
@@ -1102,6 +1252,20 @@
     state.round = r;
     save();
     render();
+    announce();
+  }
+
+  var announceTimer = null;
+  function announce() {
+    var a = $("announce");
+    $("announceNum").textContent = "Manche " + (state.round + 1);
+    $("announceName").textContent = ROUNDS[state.round].name;
+    a.classList.remove("show");
+    void a.offsetWidth;
+    a.classList.add("show");
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(function () { a.classList.remove("show"); }, 2300);
+    chime();
   }
 
   var toastTimer = null;
@@ -1117,6 +1281,8 @@
     var after = Math.max(0, Math.min(10, before + delta));
     if (after === before) return;
     state.bdm.count = after;
+    var tm = state.bdm.team;
+    if (after > state.bdm.best[tm]) state.bdm.best[tm] = after;
     save();
     render();
     restart(els.bdmCount, delta > 0 ? "bump" : "dip");
@@ -1160,6 +1326,7 @@
       p.appendChild(s);
     }
     $("winGo").style.display = showDeath ? "" : "none";
+    $("winRecap").style.display = showDeath ? "none" : "";
     $("winStay").textContent = showDeath ? "Continuer" : "Miam\u00a0!";
     spawnConfetti();
     openOverlay(els.win, showDeath ? $("winGo") : $("winStay"));
@@ -1198,7 +1365,52 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
   function anyOverlayOpen() {
-    return els.confirm.classList.contains("open") || els.win.classList.contains("open");
+    return els.confirm.classList.contains("open") || els.win.classList.contains("open") || els.recap.classList.contains("open");
+  }
+
+  function recapHtml() {
+    var esc = function (x) { return String(x); };
+    var rows = "";
+    var best = null;
+    var sumK = 0, sumM = 0;
+    for (var i = 0; i < BDM_INDEX; i++) {
+      var k = state.perRound.ketchup[i], m = state.perRound.mayo[i];
+      sumK += k; sumM += m;
+      var kc = k > m ? ' class="win-k"' : "", mc = m > k ? ' class="win-m"' : "";
+      rows += "<tr><th scope=\"row\">" + esc(ROUNDS[i].name) + "</th><td" + kc + ">" + k + "</td><td" + mc + ">" + m + "</td></tr>";
+      if (k !== m && (!best || Math.abs(k - m) > best.gap)) best = { i: i, gap: Math.abs(k - m), team: k > m ? "ketchup" : "mayo" };
+    }
+    // Points comptés avant l'arrivée du récap (ancienne sauvegarde) : ligne à part
+    var oldK = state.scores.ketchup - sumK, oldM = state.scores.mayo - sumM;
+    if (oldK !== 0 || oldM !== 0) {
+      rows += "<tr class=\"muted\"><th scope=\"row\">Avant le suivi</th><td>" + oldK + "</td><td>" + oldM + "</td></tr>";
+    }
+    var K = state.scores.ketchup, M = state.scores.mayo;
+    rows += "<tr class=\"total\"><th scope=\"row\">Total</th><td" + (K > M ? ' class="win-k"' : "") + ">" + K +
+      "</td><td" + (M > K ? ' class="win-m"' : "") + ">" + M + "</td></tr>";
+
+    var lead = K === M ? "Égalité parfaite, " + K + " Miams partout"
+      : TEAMS[K > M ? "ketchup" : "mayo"] + " mène de " + Math.abs(K - M) + " Miam" + (Math.abs(K - M) > 1 ? "s" : "");
+    var diff = best
+      ? TEAMS[best.team] + " a fait la différence en " + ROUNDS[best.i].name + " (" + best.gap + " d'écart)"
+      : (K + M === 0 ? "Aucun Miam marqué pour l'instant" : "Aucune manche n'a départagé les équipes");
+
+    var b = "";
+    ["ketchup", "mayo"].forEach(function (t) {
+      var n = state.bdm.best[t];
+      if (!n) return;
+      var label = n >= 10 ? "Grand Burger" : (n >= 5 ? "Petit Burger" : "pas de burger");
+      b += "<li><span class=\"dot " + t + "\"></span>" + TEAMS[t] + " : " + n + " / 10 &middot; " + label + "</li>";
+    });
+    if (b) b = "<h3>Burger de la Mort</h3><ul class=\"recap-bdm\">" + b + "</ul>";
+
+    return "<p class=\"recap-lead\">" + lead + "</p><p class=\"recap-diff\">" + diff + "</p>" +
+      "<table class=\"recap\"><thead><tr><th scope=\"col\">Manche</th><th scope=\"col\" class=\"k\">Ketchup</th><th scope=\"col\" class=\"m\">Mayo</th></tr></thead><tbody>" +
+      rows + "</tbody></table>" + b;
+  }
+  function openRecap() {
+    $("recapBody").innerHTML = recapHtml();
+    openOverlay(els.recap, $("recapClose"));
   }
 
   function newGame() {
@@ -1288,16 +1500,21 @@
     state.round = BDM_INDEX;
     save();
     render();
+    announce();
   });
 
-  [els.confirm, els.win].forEach(function (ov) {
+  $("recapBtn").addEventListener("click", openRecap);
+  $("recapClose").addEventListener("click", function () { closeOverlay(els.recap); });
+  $("winRecap").addEventListener("click", function () { closeOverlay(els.win); openRecap(); });
+
+  [els.confirm, els.win, els.recap].forEach(function (ov) {
     ov.addEventListener("click", function (e) { if (e.target === ov) closeOverlay(ov); });
   });
 
   document.addEventListener("keydown", function (e) {
     if (e.target === els.goal || e.metaKey || e.ctrlKey || e.altKey) return;
     if (anyOverlayOpen()) {
-      if (e.key === "Escape") { closeOverlay(els.confirm); closeOverlay(els.win); }
+      if (e.key === "Escape") { closeOverlay(els.confirm); closeOverlay(els.win); closeOverlay(els.recap); }
       return;
     }
     var k = e.key.toLowerCase();
