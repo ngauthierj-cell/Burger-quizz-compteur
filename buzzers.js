@@ -210,8 +210,7 @@
   function showHit(t) {
     els.hit.className = "hit " + t;
     els.hitTeam.textContent = TEAMS[t];
-    els.hit.hidden = false;
-    M.buzzSound(t);
+    els.hit.hidden = false; // sans son : c'est le téléphone qui a buzzé qui sonne
   }
   function hideHit() { els.hit.hidden = true; }
 
@@ -471,11 +470,15 @@
       return;
     }
     var code = sh.code, q = sh.row.question;
+    M.warmAudio();
     sh.pending = true;
     renderShared();
     rpc("buzz", { p_code: code, p_team: t, p_question: q }).then(function (won) {
       if (sh.code !== code) return;
-      if (won && sh.row && sh.row.question === q) sh.row = Object.assign({}, sh.row, { buzzed_team: t });
+      if (won && sh.row && sh.row.question === q) {
+        sh.row = Object.assign({}, sh.row, { buzzed_team: t });
+        M.buzzSound(t);
+      }
       sh.pending = false;
       renderShared();
       if (sh.link) sh.link.refresh();
@@ -645,6 +648,7 @@
   function press() {
     if (buzzerState() !== "ready") return;
     var row = bz.row, code = bz.code, t = bz.team;
+    M.warmAudio();
     bz.pending = true;
     renderBuzzer();
     rpc("buzz", { p_code: code, p_team: t, p_question: row.question }).then(function (won) {
@@ -652,7 +656,7 @@
       if (won && bz.row && bz.row.question === row.question) {
         // Le serveur a donné la main à ce buzzer : on l'affiche sans attendre le temps réel
         bz.row = Object.assign({}, bz.row, { buzzed_team: t });
-        M.blip();
+        M.buzzSound(t);
       }
       bz.pending = false;
       renderBuzzer();

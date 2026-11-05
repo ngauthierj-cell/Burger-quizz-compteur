@@ -43,7 +43,8 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre le panneau :
 - **Activer les buzzers** : crée une salle avec un code de 4 lettres et un QR code.
   Les joueurs scannent le QR code (ou tapent le code) et choisissent Ketchup ou Mayo.
   Une équipe peut avoir plusieurs téléphones.
-- Au premier buzz, l'équipe qui a la main s'affiche en grand avec le son du buzzer.
+- Au premier buzz, l'équipe qui a la main s'affiche en grand (sans son : c'est le
+  téléphone qui a buzzé qui fait « Aïe ! », à la voix de son équipe).
   Tous les buzzers sont verrouillés jusqu'à **Débloquer les buzzers** (touche **B**).
 - **Mettre en pause** : coupe les buzzers, par exemple pendant les Menus.
 - **Désactiver le mode** : ferme la salle. On continue en local, sans rien perdre.
