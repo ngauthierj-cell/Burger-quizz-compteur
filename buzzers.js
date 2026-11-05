@@ -371,7 +371,6 @@
   els.toggle.addEventListener("click", toggleEnabled);
   $("buzzStop").addEventListener("click", stopHost);
   $("hitUnlock").addEventListener("click", unlock);
-  $("hitClose").addEventListener("click", hideHit);
 
   // Reprise d'une salle encore valide après un rechargement de la page
   function restoreHost() {
