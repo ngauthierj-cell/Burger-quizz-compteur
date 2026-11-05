@@ -678,6 +678,69 @@
     to { transform: translate3d(var(--dx), 110vh, 0) rotate(var(--rot)); }
   }
 
+  /* Écran d'accueil : reprise d'une partie en cours */
+  .welcome {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    padding: var(--frame);
+    background-color: var(--jaune);
+    background-image: repeating-linear-gradient(135deg, var(--rouge) 0 clamp(18px, 3vmin, 40px), var(--jaune) clamp(18px, 3vmin, 40px) clamp(36px, 6vmin, 80px));
+  }
+  .welcome[hidden] { display: none; }
+  .welcome-panel {
+    background: var(--noir);
+    border-radius: calc(var(--radius) + 6px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(14px, 3vmin, 34px);
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+    text-align: center;
+    overflow-y: auto;
+  }
+  .welcome-panel > * { width: min(100%, 560px); }
+  .welcome-panel .brand-kicker { font-size: clamp(13px, 2.4vmin, 26px); }
+  .welcome-panel > .welcome-title { width: auto; flex-wrap: nowrap; font-size: clamp(36px, min(9vmin, 11vw), 110px); margin-top: -.25em; }
+  .welcome-game {
+    border: 2px dashed rgba(251,240,217,.3);
+    border-radius: 16px;
+    padding: clamp(14px, 2.6vmin, 30px);
+  }
+  .welcome-lead { font-family: var(--typo); font-size: clamp(15px, 2.6vmin, 28px); color: var(--creme); margin-bottom: .7em; }
+  .welcome-scores { display: flex; justify-content: center; align-items: flex-end; gap: clamp(10px, 2.4vmin, 28px); }
+  .welcome-name { font-family: var(--cond); font-weight: 700; font-size: clamp(14px, 2.4vmin, 26px); letter-spacing: .1em; text-transform: uppercase; margin-bottom: .3em; }
+  .welcome-team.k .welcome-name { color: var(--rouge); }
+  .welcome-team.m .welcome-name { color: var(--jaune); }
+  .welcome-score { font-size: clamp(36px, 7vmin, 86px); }
+  .welcome-dash { font-family: var(--slab); font-size: clamp(22px, 4vmin, 44px); color: var(--creme); padding-bottom: .4em; }
+  .welcome-info { font-family: var(--typo); font-size: clamp(13px, 2.1vmin, 22px); color: var(--gris); margin-top: .9em; }
+  .welcome-go, .welcome-new {
+    border-radius: 14px;
+    font-family: var(--cond);
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .welcome-go { border: 0; padding: clamp(16px, 2.8vmin, 28px); font-size: clamp(20px, 3.4vmin, 38px); background: var(--jaune); color: var(--noir); box-shadow: 0 5px 0 var(--jaune-fonce); }
+  .welcome-go:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--jaune-fonce); }
+  .welcome-new { border: 3px solid var(--creme); padding: clamp(12px, 2.2vmin, 22px); font-size: clamp(17px, 2.8vmin, 30px); background: transparent; color: var(--creme); }
+  .welcome-new:active { transform: translateY(2px); }
+  /* Téléphone couché : titre, partie en cours, puis les deux boutons côte à côte */
+  @media (max-height: 520px) and (orientation: landscape) {
+    .welcome-panel { display: grid; grid-template-columns: 1fr 1fr; align-content: center; justify-items: stretch; gap: 10px 14px; padding-inline: max(20px, calc((100% - 640px) / 2)); }
+    .welcome-panel > * { width: auto; }
+    .welcome-panel .brand-kicker { display: none; }
+    .welcome-panel > .welcome-title { grid-column: 1 / -1; justify-self: center; font-size: 28px; margin: 0; }
+    .welcome-game { grid-column: 1 / -1; padding: 8px 10px; }
+    .welcome-lead { margin-bottom: .3em; }
+    .welcome-score { font-size: 30px; }
+    .welcome-info { margin-top: .4em; }
+    .welcome-go, .welcome-new { padding: 12px; font-size: 17px; }
+  }
+
   /* Annonce de manche : grande pancarte en tuiles qui surgit puis s'efface */
   .announce {
     position: fixed;
@@ -912,6 +975,24 @@
   </div>
 </div>
 
+<div class="welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+  <div class="welcome-panel">
+    <div class="brand-kicker">Compteur de</div>
+    <div class="tiles welcome-title" aria-hidden="true"><span class="tile t-b">M</span><span class="tile t-r">I</span><span class="tile t-j">A</span><span class="tile t-c">M</span><span class="tile t-b">S</span></div>
+    <div class="welcome-game">
+      <div class="welcome-lead" id="welcomeTitle">Une partie vous attend</div>
+      <div class="welcome-scores">
+        <div class="welcome-team k"><div class="welcome-name">Ketchup</div><div class="tiles welcome-score" id="welcomeK"></div></div>
+        <div class="welcome-dash" aria-hidden="true">–</div>
+        <div class="welcome-team m"><div class="welcome-name">Mayo</div><div class="tiles welcome-score" id="welcomeM"></div></div>
+      </div>
+      <div class="welcome-info" id="welcomeInfo"></div>
+    </div>
+    <button class="welcome-go" id="welcomeGo">Continuer la partie</button>
+    <button class="welcome-new" id="welcomeNew">Nouvelle partie</button>
+  </div>
+</div>
+
 <div class="announce" id="announce" aria-hidden="true">
   <div class="announce-plate">
     <div class="announce-num" id="announceNum">Manche 1</div>
@@ -965,7 +1046,8 @@
       bdm: { count: 0, team: "ketchup", best: { ketchup: 0, mayo: 0 } },
       perRound: { ketchup: [0, 0, 0, 0, 0], mayo: [0, 0, 0, 0, 0] },
       muted: false,
-      keepAwake: true
+      keepAwake: true,
+      lastActive: 0
     };
   };
 
@@ -999,12 +1081,23 @@
           }
           s.muted = !!d.muted;
           if (typeof d.keepAwake === "boolean") s.keepAwake = d.keepAwake;
+          if (typeof d.lastActive === "number" && isFinite(d.lastActive)) s.lastActive = d.lastActive;
+          var act = Number(window.localStorage.getItem("compteur-miams-actif"));
+          if (isFinite(act) && act > s.lastActive) s.lastActive = act;
         }
       }
     } catch (e) { /* stockage indisponible : on part des valeurs par défaut */ }
     return s;
   }
+  // L'heure de dernière utilisation est rangée à part : la noter en quittant l'appli
+  // ne doit jamais réécrire la partie (une autre fenêtre a pu la modifier).
+  var ACTIVE_KEY = "compteur-miams-actif";
+  function touchActive() {
+    state.lastActive = Date.now();
+    try { window.localStorage.setItem(ACTIVE_KEY, String(state.lastActive)); } catch (e) { /* ignore */ }
+  }
   function save() {
+    touchActive();
     try { window.localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }
   function clampInt(v, min, max, fallback) {
@@ -1477,7 +1570,7 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
   function anyOverlayOpen() {
-    return els.confirm.classList.contains("open") || els.win.classList.contains("open") || els.recap.classList.contains("open");
+    return !$("welcome").hidden || els.confirm.classList.contains("open") || els.win.classList.contains("open") || els.recap.classList.contains("open");
   }
 
   function recapHtml() {
@@ -1536,6 +1629,74 @@
     fryer();
     toast("C'est reparti\u00a0!");
   }
+
+  /* ---------- Écran d'accueil : reprendre ou recommencer ----------
+     Affiché à l'ouverture de l'appli s'il y a une partie en cours, et au
+     retour dans l'appli après plus de 10 minutes sans l'utiliser. */
+  var WELCOME_AFTER_MS = 10 * 60 * 1000;
+  function gameInProgress() {
+    if (state.scores.ketchup || state.scores.mayo || state.round || state.bdm.count) return true;
+    return ["ketchup", "mayo"].some(function (t) { return state.perRound[t].some(function (v) { return v !== 0; }); });
+  }
+  function sinceText(ms) {
+    if (!state.lastActive || ms < 0) return "";
+    var min = Math.floor(ms / 60000);
+    if (min < 1) return "à l'instant";
+    if (min < 60) return "il y a " + min + " min";
+    var h = Math.floor(min / 60);
+    if (h < 24) return "il y a " + h + " h" + (min % 60 && h < 3 ? " " + String(min % 60).padStart(2, "0") : "");
+    var d = Math.floor(h / 24);
+    return d === 1 ? "hier" : "il y a " + d + " jours";
+  }
+  function scoreTiles(el, value, colors) {
+    el.innerHTML = "";
+    String(value).split("").forEach(function (ch, i) {
+      var t = document.createElement("span");
+      t.className = "tile " + colors[i % colors.length];
+      t.textContent = ch;
+      el.appendChild(t);
+    });
+    el.setAttribute("aria-label", value + " Miams");
+  }
+  function showWelcome() {
+    scoreTiles($("welcomeK"), state.scores.ketchup, ["t-r", "t-c"]);
+    scoreTiles($("welcomeM"), state.scores.mayo, ["t-j", "t-b"]);
+    var info = "Manche " + (state.round + 1) + " · " + ROUNDS[state.round].name;
+    if (state.round === BDM_INDEX && state.bdm.count) info += " · " + TEAMS[state.bdm.team] + " " + state.bdm.count + "/10";
+    var since = sinceText(Date.now() - state.lastActive);
+    $("welcomeInfo").textContent = since ? info + " · " + since : info;
+    // On ferme ce qui pourrait être ouvert derrière
+    [els.confirm, els.win, els.recap].forEach(function (ov) { ov.classList.remove("open"); });
+    $("welcome").hidden = false;
+    // Le repère de focus n'est utile qu'au clavier (télé + ordinateur), pas sur écran tactile
+    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $("welcomeGo").focus(); }, 50);
+  }
+  function hideWelcome() { $("welcome").hidden = true; }
+  function continueGame() {
+    hideWelcome();
+    touchActive();
+  }
+  $("welcomeGo").addEventListener("click", continueGame);
+  // Appli ouverte deux fois (navigateur + appli installée) : on suit les changements de l'autre
+  window.addEventListener("storage", function (e) {
+    if (e.key !== STORE_KEY || !e.newValue) return;
+    var keep = { muted: state.muted, keepAwake: state.keepAwake };
+    state = load();
+    state.muted = keep.muted; state.keepAwake = keep.keepAwake;
+    render();
+    if (!$("welcome").hidden && !gameInProgress()) hideWelcome();
+  });
+  $("welcomeNew").addEventListener("click", function () {
+    hideWelcome();
+    newGame();
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") {
+      touchActive(); // mémorise l'heure à laquelle on a quitté l'appli
+    } else if ($("welcome").hidden && gameInProgress() && Date.now() - state.lastActive > WELCOME_AFTER_MS) {
+      showWelcome();
+    }
+  });
 
   /* ---------- Écouteurs ---------- */
   document.querySelectorAll(".team").forEach(function (card) {
@@ -1687,6 +1848,10 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.target === els.goal || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!$("welcome").hidden) {
+      if (e.key === "Escape") continueGame();
+      return;
+    }
     if (anyOverlayOpen()) {
       if (e.key === "Escape") { closeOverlay(els.confirm); closeOverlay(els.win); closeOverlay(els.recap); }
       return;
@@ -1709,6 +1874,8 @@
   });
 
   render();
+  // À l'ouverture : proposer de reprendre la partie en cours (sans son)
+  if (gameInProgress()) showWelcome();
 
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", function () {
