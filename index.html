@@ -678,6 +678,49 @@
     to { transform: translate3d(var(--dx), 110vh, 0) rotate(var(--rot)); }
   }
 
+  /* Bandeau « partie précédente » (au-dessus du pied de page) */
+  .prev-banner {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 1.6vmin, 18px);
+    background: var(--creme);
+    color: var(--noir);
+    border-radius: 14px;
+    box-shadow: 0 0 0 4px var(--jaune), 0 6px 0 rgba(0,0,0,.45);
+    padding: clamp(8px, 1.4vmin, 16px) clamp(10px, 1.8vmin, 20px);
+    margin: 4px 4px 0;
+  }
+  .prev-banner[hidden] { display: none; }
+  .prev-text { flex: 1; min-width: 0; }
+  .prev-when { font-family: var(--typo); font-size: clamp(11px, 1.6vmin, 18px); color: var(--brun); letter-spacing: .06em; text-transform: uppercase; }
+  .prev-result { font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 2.6vmin, 30px); letter-spacing: .03em; text-transform: uppercase; }
+  .prev-recap {
+    border: 0;
+    border-radius: 999px;
+    padding: clamp(8px, 1.4vmin, 14px) clamp(14px, 2.2vmin, 24px);
+    font-family: var(--cond);
+    font-weight: 700;
+    font-size: clamp(14px, 2.2vmin, 24px);
+    text-transform: uppercase;
+    background: var(--rouge);
+    color: var(--creme);
+    box-shadow: 0 3px 0 var(--rouge-fonce);
+  }
+  .prev-recap:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--rouge-fonce); }
+  .prev-close { border: 0; background: transparent; color: var(--brun); font-size: clamp(18px, 2.6vmin, 28px); padding: 6px; line-height: 1; }
+  body.bdm .prev-banner { display: none; }
+  /* Le bandeau n'est là que sur une partie neuve (0-0) : on lui fait de la place */
+  body.has-prev:not(.bdm) .score { font-size: clamp(56px, min(16vw, 17vh), 220px); }
+  body.has-prev:not(.bdm) .to-go { display: none; }
+  @media (max-height: 520px) and (orientation: landscape) {
+    .prev-banner { padding: 3px 10px; margin-top: 2px; }
+    .prev-text { display: flex; align-items: baseline; gap: 10px; }
+    .prev-when { font-size: 11px; }
+    .prev-result { font-size: 14px; }
+    .prev-recap { padding: 5px 14px; font-size: 13px; }
+    .prev-close { padding: 2px 6px; font-size: 16px; }
+  }
+
   /* Écran d'accueil : reprise d'une partie en cours */
   .welcome {
     position: fixed;
@@ -728,10 +771,6 @@
   .welcome-go:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--jaune-fonce); }
   .welcome-new { border: 3px solid var(--creme); padding: clamp(12px, 2.2vmin, 22px); font-size: clamp(17px, 2.8vmin, 30px); background: transparent; color: var(--creme); }
   .welcome-new:active { transform: translateY(2px); }
-  /* Partie terminée : « Nouvelle partie » devient le bouton principal, en premier */
-  .welcome.done .welcome-new { order: 1; border: 0; padding: clamp(16px, 2.8vmin, 28px); font-size: clamp(20px, 3.4vmin, 38px); background: var(--jaune); color: var(--noir); box-shadow: 0 5px 0 var(--jaune-fonce); }
-  .welcome.done .welcome-go { order: 2; border: 3px solid var(--creme); padding: clamp(12px, 2.2vmin, 22px); font-size: clamp(17px, 2.8vmin, 30px); background: transparent; color: var(--creme); box-shadow: none; }
-  .welcome.done .welcome-lead { font-family: var(--slab); color: var(--jaune); font-size: clamp(20px, 3.4vmin, 36px); }
   /* Téléphone couché : titre, partie en cours, puis les deux boutons côte à côte */
   @media (max-height: 520px) and (orientation: landscape) {
     .welcome-panel { display: grid; grid-template-columns: 1fr 1fr; align-content: center; justify-items: stretch; gap: 10px 14px; padding-inline: max(20px, calc((100% - 640px) / 2)); }
@@ -742,7 +781,7 @@
     .welcome-lead { margin-bottom: .3em; }
     .welcome-score { font-size: 30px; }
     .welcome-info { margin-top: .4em; }
-    .welcome-go, .welcome-new, .welcome.done .welcome-go, .welcome.done .welcome-new { padding: 12px; font-size: 17px; }
+    .welcome-go, .welcome-new { padding: 12px; font-size: 17px; }
   }
 
   /* Annonce de manche : grande pancarte en tuiles qui surgit puis s'efface */
@@ -951,6 +990,15 @@
     </div>
   </section>
 
+  <div class="prev-banner" id="prevBanner" hidden>
+    <div class="prev-text">
+      <div class="prev-when" id="prevWhen">Partie précédente</div>
+      <div class="prev-result" id="prevResult"></div>
+    </div>
+    <button class="prev-recap" id="prevRecap">Récap</button>
+    <button class="prev-close" id="prevClose" aria-label="Masquer la partie précédente">&#10005;</button>
+  </div>
+
   <footer class="footer">
     <label class="goal">Objectif
       <input id="goalInput" type="number" inputmode="numeric" min="1" max="999" value="25" aria-label="Objectif en Miams">
@@ -1051,7 +1099,9 @@
       perRound: { ketchup: [0, 0, 0, 0, 0], mayo: [0, 0, 0, 0, 0] },
       muted: false,
       keepAwake: true,
-      lastActive: 0
+      lastActive: 0,
+      finishedAt: 0,
+      previous: null
     };
   };
 
@@ -1088,11 +1138,30 @@
           if (typeof d.lastActive === "number" && isFinite(d.lastActive)) s.lastActive = d.lastActive;
           var act = Number(window.localStorage.getItem("compteur-miams-actif"));
           if (isFinite(act) && act > s.lastActive) s.lastActive = act;
+          s.previous = readPrevious(d.previous);
+          if (typeof d.finishedAt === "number" && isFinite(d.finishedAt)) s.finishedAt = d.finishedAt;
         }
       }
     } catch (e) { /* stockage indisponible : on part des valeurs par défaut */ }
     return s;
   }
+  // Partie terminée rangée de côté (pour revoir son récap) : on vérifie ce qu'on relit
+  function readPrevious(p) {
+    if (!p || typeof p !== "object" || !p.scores) return null;
+    var g = {
+      scores: { ketchup: clampInt(p.scores.ketchup, 0, 9999, 0), mayo: clampInt(p.scores.mayo, 0, 9999, 0) },
+      perRound: { ketchup: [0, 0, 0, 0, 0], mayo: [0, 0, 0, 0, 0] },
+      bdm: { team: p.bdm && p.bdm.team === "mayo" ? "mayo" : "ketchup", best: { ketchup: 0, mayo: 0 } },
+      finishedAt: typeof p.finishedAt === "number" && isFinite(p.finishedAt) ? p.finishedAt : 0
+    };
+    ["ketchup", "mayo"].forEach(function (t) {
+      var arr = (p.perRound && p.perRound[t]) || [];
+      for (var i = 0; i < ROUNDS.length; i++) g.perRound[t][i] = clampInt(arr[i], -9999, 9999, 0);
+      if (p.bdm && p.bdm.best) g.bdm.best[t] = clampInt(p.bdm.best[t], 0, 10, 0);
+    });
+    return g;
+  }
+
   // L'heure de dernière utilisation est rangée à part : la noter en quittant l'appli
   // ne doit jamais réécrire la partie (une autre fenêtre a pu la modifier).
   var ACTIVE_KEY = "compteur-miams-actif";
@@ -1397,11 +1466,34 @@
     else st.textContent = "GRAND BURGER pour " + name + "\u00a0!";
 
     if (document.activeElement !== els.goal) els.goal.value = state.goal;
+    renderPrevious();
 
     els.sound.querySelector(".wave").style.display = state.muted ? "none" : "";
     els.sound.querySelector(".mute").style.display = state.muted ? "" : "none";
     els.sound.setAttribute("aria-label", state.muted ? "Activer le son" : "Couper le son");
     els.sound.setAttribute("aria-pressed", String(state.muted));
+  }
+
+  function whenText(t) {
+    if (!t) return "";
+    var now = new Date(), d = new Date(t), min = Math.floor((now - d) / 60000);
+    if (min < 1) return "à l'instant";
+    if (min < 60) return "il y a " + min + " min";
+    var hm = d.getHours() + " h " + String(d.getMinutes()).padStart(2, "0");
+    var day = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+    var days = Math.round((day(now) - day(d)) / 86400000);
+    if (days === 0) return "aujourd'hui, " + hm;
+    if (days === 1) return "hier, " + hm;
+    return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+  }
+  function renderPrevious() {
+    var p = state.previous, b = $("prevBanner");
+    b.hidden = !p;
+    document.body.classList.toggle("has-prev", !!p);
+    if (!p) return;
+    var when = whenText(p.finishedAt);
+    $("prevWhen").textContent = "Partie précédente" + (when ? " · " + when : "");
+    $("prevResult").textContent = TEAMS[p.bdm.team] + " gagne " + p.scores.ketchup + "\u00a0–\u00a0" + p.scores.mayo;
   }
 
   /* ---------- Actions ---------- */
@@ -1411,6 +1503,7 @@
     if (after === before) return;
     state.scores[team] = after;
     state.perRound[team][state.round] += after - before;
+    if (delta > 0) state.previous = null;
     save();
     render();
     var scoreEl = $("score-" + team);
@@ -1512,6 +1605,8 @@
     // Burger de la Mort : pas de son sur les points ; seuls la victoire à 10
     // et l'erreur (bdmFail) font du bruit.
     if (after === 10 && delta > 0) {
+      state.finishedAt = Date.now();
+      save();
       fanfare();
       celebrate("Grand Burger\u00a0!", TEAMS[state.bdm.team] + " a dévoré les 10 questions\u00a0!", false);
     } else if (after === 5 && delta > 0) {
@@ -1591,24 +1686,25 @@
     return !$("welcome").hidden || els.confirm.classList.contains("open") || els.win.classList.contains("open") || els.recap.classList.contains("open");
   }
 
-  function recapHtml() {
+  function recapHtml(game) {
+    var g = game || state;
     var esc = function (x) { return String(x); };
     var rows = "";
     var best = null;
     var sumK = 0, sumM = 0;
     for (var i = 0; i < BDM_INDEX; i++) {
-      var k = state.perRound.ketchup[i], m = state.perRound.mayo[i];
+      var k = g.perRound.ketchup[i], m = g.perRound.mayo[i];
       sumK += k; sumM += m;
       var kc = k > m ? ' class="win-k"' : "", mc = m > k ? ' class="win-m"' : "";
       rows += "<tr><th scope=\"row\">" + esc(ROUNDS[i].name) + "</th><td" + kc + ">" + k + "</td><td" + mc + ">" + m + "</td></tr>";
       if (k !== m && (!best || Math.abs(k - m) > best.gap)) best = { i: i, gap: Math.abs(k - m), team: k > m ? "ketchup" : "mayo" };
     }
     // Points comptés avant l'arrivée du récap (ancienne sauvegarde) : ligne à part
-    var oldK = state.scores.ketchup - sumK, oldM = state.scores.mayo - sumM;
+    var oldK = g.scores.ketchup - sumK, oldM = g.scores.mayo - sumM;
     if (oldK !== 0 || oldM !== 0) {
       rows += "<tr class=\"muted\"><th scope=\"row\">Avant le suivi</th><td>" + oldK + "</td><td>" + oldM + "</td></tr>";
     }
-    var K = state.scores.ketchup, M = state.scores.mayo;
+    var K = g.scores.ketchup, M = g.scores.mayo;
     rows += "<tr class=\"total\"><th scope=\"row\">Total</th><td" + (K > M ? ' class="win-k"' : "") + ">" + K +
       "</td><td" + (M > K ? ' class="win-m"' : "") + ">" + M + "</td></tr>";
 
@@ -1620,7 +1716,7 @@
 
     var b = "";
     ["ketchup", "mayo"].forEach(function (t) {
-      var n = state.bdm.best[t];
+      var n = g.bdm.best[t];
       if (!n) return;
       var label = n >= 10 ? "Grand Burger" : (n >= 5 ? "Petit Burger" : "pas de burger");
       b += "<li><span class=\"dot " + t + "\"></span>" + TEAMS[t] + " : " + n + " / 10 &middot; " + label + "</li>";
@@ -1631,19 +1727,36 @@
       "<table class=\"recap\"><thead><tr><th scope=\"col\">Manche</th><th scope=\"col\" class=\"k\">Ketchup</th><th scope=\"col\" class=\"m\">Mayo</th></tr></thead><tbody>" +
       rows + "</tbody></table>" + b;
   }
-  function openRecap() {
-    $("recapBody").innerHTML = recapHtml();
+  function openRecap(game) {
+    $("recapTitle").textContent = game ? "Partie précédente" : "Le récap";
+    $("recapBody").innerHTML = recapHtml(game);
     openOverlay(els.recap, $("recapClose"));
   }
 
-  function newGame() {
+  // Copie d'une partie terminée, gardée pour revoir son récap
+  function snapshotFinished() {
+    return {
+      scores: { ketchup: state.scores.ketchup, mayo: state.scores.mayo },
+      perRound: { ketchup: state.perRound.ketchup.slice(), mayo: state.perRound.mayo.slice() },
+      bdm: { team: state.bdm.team, best: { ketchup: state.bdm.best.ketchup, mayo: state.bdm.best.mayo } },
+      finishedAt: state.finishedAt || state.lastActive || Date.now()
+    };
+  }
+  // Remet tout à zéro (objectif et réglages gardés) ; une partie terminée est rangée
+  // comme « partie précédente », sinon l'ancienne partie précédente est oubliée.
+  function resetGame() {
     var keepGoal = state.goal, keepMuted = state.muted, keepAwake = state.keepAwake;
+    var prev = gameFinished() ? snapshotFinished() : null;
     state = defaults();
+    state.previous = prev;
     state.goal = keepGoal;
     state.muted = keepMuted;
     state.keepAwake = keepAwake;
     save();
     render();
+  }
+  function newGame() {
+    resetGame();
     fryer();
     toast("C'est reparti\u00a0!");
   }
@@ -1684,20 +1797,15 @@
   function showWelcome() {
     scoreTiles($("welcomeK"), state.scores.ketchup, ["t-r", "t-c"]);
     scoreTiles($("welcomeM"), state.scores.mayo, ["t-j", "t-b"]);
-    var done = gameFinished();
-    $("welcome").classList.toggle("done", done);
-    $("welcomeTitle").textContent = done ? "Partie terminée" : "Une partie vous attend";
-    $("welcomeGo").textContent = done ? "Revoir la partie" : "Continuer la partie";
-    var info = done ? "Grand Burger pour " + TEAMS[state.bdm.team]
-      : "Manche " + (state.round + 1) + " · " + ROUNDS[state.round].name;
-    if (!done && state.round === BDM_INDEX && state.bdm.count) info += " · " + TEAMS[state.bdm.team] + " " + state.bdm.count + "/10";
+    var info = "Manche " + (state.round + 1) + " · " + ROUNDS[state.round].name;
+    if (state.round === BDM_INDEX && state.bdm.count) info += " · " + TEAMS[state.bdm.team] + " " + state.bdm.count + "/10";
     var since = sinceText(Date.now() - state.lastActive);
     $("welcomeInfo").textContent = since ? info + " · " + since : info;
     // On ferme ce qui pourrait être ouvert derrière
     [els.confirm, els.win, els.recap].forEach(function (ov) { ov.classList.remove("open"); });
     $("welcome").hidden = false;
     // Le repère de focus n'est utile qu'au clavier (télé + ordinateur), pas sur écran tactile
-    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $(done ? "welcomeNew" : "welcomeGo").focus(); }, 50);
+    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $("welcomeGo").focus(); }, 50);
   }
   function hideWelcome() { $("welcome").hidden = true; }
   function continueGame() {
@@ -1721,8 +1829,9 @@
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "hidden") {
       touchActive(); // mémorise l'heure à laquelle on a quitté l'appli
-    } else if ($("welcome").hidden && gameInProgress() && Date.now() - state.lastActive > WELCOME_AFTER_MS) {
-      showWelcome();
+    } else if ($("welcome").hidden && Date.now() - state.lastActive > WELCOME_AFTER_MS) {
+      if (gameFinished()) resetGame();
+      else if (gameInProgress()) showWelcome();
     }
   });
 
@@ -1867,9 +1976,15 @@
     announce();
   });
 
-  $("recapBtn").addEventListener("click", openRecap);
+  $("recapBtn").addEventListener("click", function () { openRecap(); });
   $("recapClose").addEventListener("click", function () { closeOverlay(els.recap); });
   $("winRecap").addEventListener("click", function () { closeOverlay(els.win); openRecap(); });
+  $("prevRecap").addEventListener("click", function () { if (state.previous) openRecap(state.previous); });
+  $("prevClose").addEventListener("click", function () {
+    state.previous = null;
+    save();
+    render();
+  });
 
   [els.confirm, els.win, els.recap].forEach(function (ov) {
     ov.addEventListener("click", function (e) { if (e.target === ov) closeOverlay(ov); });
@@ -1904,7 +2019,9 @@
 
   render();
   // À l'ouverture : proposer de reprendre la partie en cours (sans son)
-  if (gameInProgress()) showWelcome();
+  // Partie terminée (Grand Burger) : on la range et on démarre une partie neuve, sans son.
+  if (gameFinished()) resetGame();
+  else if (gameInProgress()) showWelcome();
 
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", function () {
