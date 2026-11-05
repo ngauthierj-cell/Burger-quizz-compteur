@@ -728,6 +728,10 @@
   .welcome-go:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--jaune-fonce); }
   .welcome-new { border: 3px solid var(--creme); padding: clamp(12px, 2.2vmin, 22px); font-size: clamp(17px, 2.8vmin, 30px); background: transparent; color: var(--creme); }
   .welcome-new:active { transform: translateY(2px); }
+  /* Partie terminée : « Nouvelle partie » devient le bouton principal, en premier */
+  .welcome.done .welcome-new { order: 1; border: 0; padding: clamp(16px, 2.8vmin, 28px); font-size: clamp(20px, 3.4vmin, 38px); background: var(--jaune); color: var(--noir); box-shadow: 0 5px 0 var(--jaune-fonce); }
+  .welcome.done .welcome-go { order: 2; border: 3px solid var(--creme); padding: clamp(12px, 2.2vmin, 22px); font-size: clamp(17px, 2.8vmin, 30px); background: transparent; color: var(--creme); box-shadow: none; }
+  .welcome.done .welcome-lead { font-family: var(--slab); color: var(--jaune); font-size: clamp(20px, 3.4vmin, 36px); }
   /* Téléphone couché : titre, partie en cours, puis les deux boutons côte à côte */
   @media (max-height: 520px) and (orientation: landscape) {
     .welcome-panel { display: grid; grid-template-columns: 1fr 1fr; align-content: center; justify-items: stretch; gap: 10px 14px; padding-inline: max(20px, calc((100% - 640px) / 2)); }
@@ -738,7 +742,7 @@
     .welcome-lead { margin-bottom: .3em; }
     .welcome-score { font-size: 30px; }
     .welcome-info { margin-top: .4em; }
-    .welcome-go, .welcome-new { padding: 12px; font-size: 17px; }
+    .welcome-go, .welcome-new, .welcome.done .welcome-go, .welcome.done .welcome-new { padding: 12px; font-size: 17px; }
   }
 
   /* Annonce de manche : grande pancarte en tuiles qui surgit puis s'efface */
@@ -1648,9 +1652,14 @@
      Affiché à l'ouverture de l'appli s'il y a une partie en cours, et au
      retour dans l'appli après plus de 10 minutes sans l'utiliser. */
   var WELCOME_AFTER_MS = 10 * 60 * 1000;
+  // Une partie compte comme commencée dès qu'une équipe a au moins un Miam
+  // (changer de manche sans marquer ne suffit pas).
   function gameInProgress() {
-    if (state.scores.ketchup || state.scores.mayo || state.round || state.bdm.count) return true;
-    return ["ketchup", "mayo"].some(function (t) { return state.perRound[t].some(function (v) { return v !== 0; }); });
+    return state.scores.ketchup > 0 || state.scores.mayo > 0;
+  }
+  // Partie terminée : le Grand Burger (10/10) a été atteint
+  function gameFinished() {
+    return state.round === BDM_INDEX && state.bdm.count >= 10;
   }
   function sinceText(ms) {
     if (!state.lastActive || ms < 0) return "";
@@ -1675,15 +1684,20 @@
   function showWelcome() {
     scoreTiles($("welcomeK"), state.scores.ketchup, ["t-r", "t-c"]);
     scoreTiles($("welcomeM"), state.scores.mayo, ["t-j", "t-b"]);
-    var info = "Manche " + (state.round + 1) + " · " + ROUNDS[state.round].name;
-    if (state.round === BDM_INDEX && state.bdm.count) info += " · " + TEAMS[state.bdm.team] + " " + state.bdm.count + "/10";
+    var done = gameFinished();
+    $("welcome").classList.toggle("done", done);
+    $("welcomeTitle").textContent = done ? "Partie terminée" : "Une partie vous attend";
+    $("welcomeGo").textContent = done ? "Revoir la partie" : "Continuer la partie";
+    var info = done ? "Grand Burger pour " + TEAMS[state.bdm.team]
+      : "Manche " + (state.round + 1) + " · " + ROUNDS[state.round].name;
+    if (!done && state.round === BDM_INDEX && state.bdm.count) info += " · " + TEAMS[state.bdm.team] + " " + state.bdm.count + "/10";
     var since = sinceText(Date.now() - state.lastActive);
     $("welcomeInfo").textContent = since ? info + " · " + since : info;
     // On ferme ce qui pourrait être ouvert derrière
     [els.confirm, els.win, els.recap].forEach(function (ov) { ov.classList.remove("open"); });
     $("welcome").hidden = false;
     // Le repère de focus n'est utile qu'au clavier (télé + ordinateur), pas sur écran tactile
-    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $("welcomeGo").focus(); }, 50);
+    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $(done ? "welcomeNew" : "welcomeGo").focus(); }, 50);
   }
   function hideWelcome() { $("welcome").hidden = true; }
   function continueGame() {
