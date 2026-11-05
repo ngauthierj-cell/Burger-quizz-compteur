@@ -1386,7 +1386,8 @@
     var name = TEAMS[state.bdm.team];
     var st = els.bdmStatus;
     st.classList.toggle("win", c >= 5);
-    if (c === 0) st.textContent = "À " + name + " de jouer : 10 réponses, sans faute\u00a0!";
+    if (c === 0 && !bdmPicked && !scoreLeader() && (state.scores.ketchup || state.scores.mayo)) st.textContent = "Égalité\u00a0! Choisissez l'équipe qui affronte le Burger";
+    else if (c === 0) st.textContent = "À " + name + " de jouer : 10 réponses, sans faute\u00a0!";
     else if (c < 5) st.textContent = "Encore " + (5 - c) + " pour le Petit Burger";
     else if (c < 10) st.textContent = "Petit Burger en poche ! Encore " + (10 - c) + " pour le Grand Burger";
     else st.textContent = "GRAND BURGER pour " + name + "\u00a0!";
@@ -1435,9 +1436,22 @@
     r = Math.max(0, Math.min(BDM_INDEX, r));
     if (r === state.round) return;
     state.round = r;
+    bdmPicked = false;
+    // En arrivant au Burger de la Mort sans gagnant désigné, c'est l'équipe qui a
+    // le plus de Miams qui le joue (sauf si une série est déjà commencée).
+    if (r === BDM_INDEX && state.bdm.count === 0) {
+      var lead = scoreLeader();
+      if (lead) state.bdm.team = lead;
+    }
     save();
     render();
     announce();
+  }
+
+  var bdmPicked = false; // équipe choisie à la main depuis l'arrivée au Burger
+  function scoreLeader() {
+    var k = state.scores.ketchup, m = state.scores.mayo;
+    return k > m ? "ketchup" : (m > k ? "mayo" : null);
   }
 
   // Écrit un texte en tuiles de lettres (un groupe par mot pour couper proprement)
@@ -1714,6 +1728,7 @@
   document.querySelectorAll("[data-bdm-team]").forEach(function (b) {
     b.addEventListener("click", function () {
       state.bdm.team = b.getAttribute("data-bdm-team");
+      bdmPicked = true;
       save();
       render();
     });
