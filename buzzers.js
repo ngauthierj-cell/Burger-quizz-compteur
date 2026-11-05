@@ -1,0 +1,695 @@
+// Mode « Buzzers » : facultatif, l'appli marche sans.
+//  - Buzzers connectés (Supabase) : le présentateur crée une salle, les téléphones
+//    des équipes la rejoignent avec un code. C'est le serveur qui décide du premier
+//    buzz (fonction SQL « buzz », voir supabase/migrations).
+//  - Buzzer écran partagé : sur l'appareil du présentateur, sans réseau.
+// Le présentateur reste la seule source de vérité des scores : ils restent en
+// local et sont seulement recopiés dans la salle pour le récap des joueurs.
+(function () {
+  "use strict";
+
+  var M = window.Miams;
+  if (!M) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var TEAMS = M.teams;
+  var CFG = window.MIAMS_CONFIG || {};
+  var CONFIGURED = typeof CFG.supabaseUrl === "string" && /^https:\/\//.test(CFG.supabaseUrl) &&
+    typeof CFG.supabaseAnonKey === "string" && CFG.supabaseAnonKey.length > 20;
+  var HOST_KEY = "compteur-miams-salle";
+  var BUZZER_KEY = "compteur-miams-buzzer";
+  var TIMEOUT_MS = 8000;
+
+  function readJson(key) {
+    try { return JSON.parse(window.localStorage.getItem(key) || "null"); } catch (e) { return null; }
+  }
+  function writeJson(key, val) {
+    try {
+      if (val == null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) { /* stockage indisponible : tant pis, on garde en mémoire */ }
+  }
+  function cleanCode(v) { return String(v || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4); }
+  function int(v, min, max) {
+    var n = parseInt(v, 10);
+    return isNaN(n) ? 0 : Math.min(max, Math.max(min, n));
+  }
+  function team(v) { return v === "mayo" ? "mayo" : (v === "ketchup" ? "ketchup" : null); }
+  function tiles(el, text, colors) {
+    el.innerHTML = "";
+    String(text).split("").forEach(function (ch, i) {
+      var t = document.createElement("span");
+      t.className = "tile " + colors[i % colors.length];
+      t.textContent = ch;
+      el.appendChild(t);
+    });
+    el.setAttribute("aria-label", text);
+  }
+  function setNet(el, net, text) {
+    el.setAttribute("data-net", net);
+    el.querySelector("span").textContent = text;
+  }
+
+  /* ================= Connexion à Supabase ================= */
+  // La bibliothèque n'est chargée qu'au premier usage du mode buzzers connectés.
+  var libPromise = null, client = null;
+  function loadLib() {
+    if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+    if (!libPromise) {
+      libPromise = new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = "vendor/supabase.js";
+        s.onload = function () { window.supabase ? resolve(window.supabase) : reject(new Error("lib")); };
+        s.onerror = function () { libPromise = null; s.remove(); reject(new Error("lib")); };
+        document.head.appendChild(s);
+      });
+    }
+    return libPromise;
+  }
+  function getClient() {
+    if (!CONFIGURED) return Promise.reject(new Error("config"));
+    return loadLib().then(function (lib) {
+      if (!client) {
+        client = lib.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        });
+      }
+      return client;
+    });
+  }
+  function timeout(p) {
+    return Promise.race([p, new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error("timeout")); }, TIMEOUT_MS);
+    })]);
+  }
+  function rpc(name, args) {
+    return getClient()
+      .then(function (c) { return timeout(c.rpc(name, args || {})); })
+      .then(function (r) { if (r.error) throw r.error; return r.data; });
+  }
+  function fetchRoom(code) {
+    return getClient()
+      .then(function (c) { return timeout(c.from("rooms").select("*").eq("code", code).maybeSingle()); })
+      .then(function (r) { if (r.error) throw r.error; return r.data; });
+  }
+
+  // Abonnement temps réel à une salle, avec reconnexion automatique.
+  // onRow(row | null) : nouvel état de la salle (null = salle disparue)
+  // onNet("online" | "offline")
+  var linkSeq = 0;
+  function RoomLink(code, onRow, onNet) {
+    var channel = null, retry = 0, timer = null, stopped = false, net = "connecting";
+    function setNetState(n) { if (n !== net) { net = n; onNet(n); } }
+    function refresh() {
+      return fetchRoom(code).then(function (row) {
+        if (!stopped) onRow(row);
+      }).catch(function () { if (!stopped) { setNetState("offline"); schedule(); } });
+    }
+    function schedule() {
+      if (stopped || timer) return;
+      var delay = Math.min(30000, 1000 * Math.pow(2, retry)) + Math.random() * 500;
+      retry = Math.min(retry + 1, 5);
+      timer = setTimeout(function () { timer = null; connect(); }, delay);
+    }
+    function connect() {
+      if (stopped) return;
+      clearTimeout(timer); timer = null;
+      getClient().then(function (c) {
+        if (stopped) return;
+        if (channel) { var old = channel; channel = null; c.removeChannel(old); }
+        var ch = c.channel("salle-" + code + "-" + (++linkSeq));
+        channel = ch;
+        ch.on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: "code=eq." + code }, function (p) {
+          if (stopped || ch !== channel) return;
+          if (p.eventType === "DELETE") onRow(null);
+          else onRow(p.new);
+        }).subscribe(function (status) {
+          if (stopped || ch !== channel) return;
+          if (status === "SUBSCRIBED") {
+            retry = 0;
+            setNetState("online");
+            refresh(); // rattrape ce qui a pu changer pendant la coupure
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setNetState("offline");
+            schedule();
+          }
+        });
+      }).catch(function () { setNetState("offline"); schedule(); });
+    }
+    function kick() { if (!stopped) { retry = 0; connect(); } }
+    function onOnline() { kick(); }
+    function onVisible() {
+      if (document.visibilityState !== "visible" || stopped) return;
+      if (net === "online") refresh(); else kick();
+    }
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    connect();
+    return {
+      refresh: refresh,
+      kick: kick,
+      net: function () { return net; },
+      stop: function () {
+        stopped = true;
+        clearTimeout(timer);
+        window.removeEventListener("online", onOnline);
+        document.removeEventListener("visibilitychange", onVisible);
+        if (channel && client) { var old = channel; channel = null; client.removeChannel(old); }
+      }
+    };
+  }
+
+  /* ================= Présentateur ================= */
+  var host = { room: null, row: null, link: null, net: "off", lastHit: "", published: "", dirty: false, timer: null, expiry: null };
+  var els = {
+    btn: $("buzzersBtn"), overlay: $("buzzOverlay"), off: $("buzzOff"), on: $("buzzOn"), note: $("buzzNote"),
+    net: $("buzzNet"), code: $("buzzCode"), qr: $("buzzQr"), state: $("buzzState"),
+    unlock: $("buzzUnlock"), toggle: $("buzzToggle"), start: $("buzzStart"),
+    hit: $("buzzHit"), hitTeam: $("hitTeam"), banner: $("netBanner")
+  };
+
+  function note(text, isErr) {
+    els.note.textContent = text || "";
+    els.note.classList.toggle("err", !!isErr);
+  }
+  function joinUrl(code) {
+    return location.origin + location.pathname + "?salle=" + code;
+  }
+  function timeText(ms) {
+    var d = new Date(ms);
+    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  }
+
+  function renderHost() {
+    var room = host.room, row = host.row;
+    els.off.hidden = !!room;
+    els.on.hidden = !room;
+    els.btn.classList.toggle("on", !!room && host.net === "online");
+    els.btn.classList.toggle("warn", !!room && host.net === "offline");
+    var hand = room && row && team(row.buzzed_team);
+    els.btn.classList.toggle("hand-ketchup", hand === "ketchup");
+    els.btn.classList.toggle("hand-mayo", hand === "mayo");
+    els.banner.hidden = !(room && host.net === "offline" && M.mode() === "host");
+    if (!room) return;
+    setNet(els.net, host.net === "online" ? "online" : (host.net === "offline" ? "offline" : "connecting"),
+      host.net === "online" ? "Connecté" : (host.net === "offline" ? "Hors ligne · reconnexion…" : "Connexion…"));
+    if (els.code.getAttribute("aria-label") !== room.code) {
+      tiles(els.code, room.code, ["t-r", "t-j", "t-c", "t-b"]);
+      els.qr.innerHTML = window.MiamsQR ? window.MiamsQR.svg(joinUrl(room.code), "#141210", "#fbf0d9") : "";
+      els.qr.setAttribute("aria-label", "QR code pour rejoindre la salle " + room.code);
+      els.qr.setAttribute("role", "img");
+    }
+    var enabled = !row || row.buzzers_enabled;
+    var who = row && team(row.buzzed_team);
+    els.state.className = "buzz-state" + (who ? (who === "ketchup" ? " k" : " m") : "");
+    els.state.textContent = !row ? "" : (!enabled ? "Buzzers en pause" : (who ? TEAMS[who] + " a la main !" : "Buzzers prêts, en attente d'un buzz…"));
+    els.toggle.textContent = enabled ? "Mettre en pause" : "Réactiver les buzzers";
+    els.unlock.disabled = !who;
+    if (!els.note.classList.contains("err")) note("Salle valable jusqu'à " + timeText(room.expiresAt) + ". Les joueurs scannent le QR code ou tapent le code.");
+  }
+
+  function showHit(t) {
+    els.hit.className = "hit " + t;
+    els.hitTeam.textContent = TEAMS[t];
+    els.hit.hidden = false;
+    M.buzzSound(t);
+  }
+  function hideHit() { els.hit.hidden = true; }
+
+  function onHostRow(row) {
+    if (!host.room) return;
+    if (!row || row.closed) { roomGone("La salle n'existe plus (expirée ou fermée). Vous pouvez en ouvrir une nouvelle."); return; }
+    host.row = row;
+    var who = team(row.buzzed_team);
+    if (who) {
+      var key = row.question + ":" + who;
+      if (key !== host.lastHit) {
+        host.lastHit = key;
+        host.room.lastHit = key;
+        writeJson(HOST_KEY, host.room);
+        if (M.mode() === "host") showHit(who);
+      }
+    } else {
+      hideHit();
+    }
+    renderHost();
+  }
+  function onHostNet(net) {
+    host.net = net;
+    if (net === "online" && host.dirty) publishNow();
+    renderHost();
+  }
+
+  function connectHost() {
+    if (host.link) host.link.stop();
+    host.net = "connecting";
+    host.link = RoomLink(host.room.code, onHostRow, onHostNet);
+    clearTimeout(host.expiry);
+    host.expiry = setTimeout(function () {
+      roomGone("La salle a expiré (12 h). Vous pouvez en ouvrir une nouvelle.");
+    }, Math.max(0, host.room.expiresAt - Date.now()));
+    renderHost();
+  }
+
+  function activate() {
+    note("");
+    if (!CONFIGURED) {
+      note("Les buzzers connectés ne sont pas configurés sur cette appli (voir le README). Le buzzer écran partagé marche sans réseau.", true);
+      return;
+    }
+    els.start.disabled = true;
+    note("Ouverture de la salle…");
+    rpc("create_room").then(function (data) {
+      var r = Array.isArray(data) ? data[0] : data;
+      if (!r || !r.code || !r.host_token) throw new Error("salle");
+      host.room = { code: r.code, token: r.host_token, expiresAt: Date.parse(r.expires_at) || Date.now() + 12 * 3600 * 1000, lastHit: "" };
+      host.lastHit = "";
+      host.published = "";
+      writeJson(HOST_KEY, host.room);
+      note("");
+      connectHost();
+      publishNow();
+    }).catch(function () {
+      note("Impossible de joindre le serveur des buzzers. Vérifiez la connexion et réessayez. Le compteur continue en local, et le buzzer écran partagé marche sans réseau.", true);
+    }).then(function () { els.start.disabled = false; renderHost(); });
+  }
+
+  // Actions du présentateur : en cas d'échec réseau, on prévient sans rien bloquer
+  function hostAction(name, args, done) {
+    if (!host.room) return;
+    var room = host.room;
+    rpc(name, Object.assign({ p_code: room.code, p_token: room.token }, args || {})).then(function (ok) {
+      if (host.room !== room) return;
+      if (ok === false) { roomGone("La salle n'existe plus (expirée ou fermée). Vous pouvez en ouvrir une nouvelle."); return; }
+      if (done) done();
+      host.link.refresh();
+    }).catch(function () {
+      if (host.room !== room) return;
+      M.toast("Pas de réseau");
+      host.link.kick();
+    });
+  }
+  function unlock() {
+    hideHit();
+    hostAction("host_unlock");
+  }
+  function toggleEnabled() {
+    var enabled = !host.row || host.row.buzzers_enabled;
+    hostAction("host_set_enabled", { p_enabled: !enabled }, function () {
+      M.toast(enabled ? "Buzzers en pause" : "Buzzers actifs");
+    });
+  }
+  function stopHost() {
+    if (!host.room) return;
+    var room = host.room;
+    rpc("host_close", { p_code: room.code, p_token: room.token }).catch(function () { /* elle expirera d'elle-même */ });
+    clearRoom();
+    note("");
+    renderHost();
+    M.toast("Buzzers coupés");
+  }
+  function clearRoom() {
+    if (host.link) host.link.stop();
+    clearTimeout(host.expiry);
+    clearTimeout(host.timer);
+    host.link = null;
+    host.room = null;
+    host.row = null;
+    host.net = "off";
+    host.dirty = false;
+    writeJson(HOST_KEY, null);
+    hideHit();
+  }
+  function roomGone(msg) {
+    if (!host.room) return;
+    clearRoom();
+    note(msg, true);
+    renderHost();
+    if (M.mode() === "host") openPanel();
+  }
+
+  // Récap publié dans la salle à chaque changement de la partie
+  function schedulePublish() {
+    if (!host.room) return;
+    clearTimeout(host.timer);
+    host.timer = setTimeout(publishNow, 300);
+  }
+  function publishNow() {
+    if (!host.room) return;
+    var snap = M.snapshot();
+    var json = JSON.stringify(snap);
+    if (json === host.published && !host.dirty) return;
+    var room = host.room;
+    rpc("host_publish", { p_code: room.code, p_token: room.token, p_recap: snap }).then(function (ok) {
+      if (host.room !== room) return;
+      if (ok === false) { roomGone("La salle n'existe plus (expirée ou fermée). Vous pouvez en ouvrir une nouvelle."); return; }
+      host.published = json;
+      host.dirty = false;
+    }).catch(function () {
+      if (host.room !== room) return;
+      host.dirty = true; // renvoyé dès que la connexion revient
+      host.link.kick();
+    });
+  }
+  document.addEventListener("miams:save", schedulePublish);
+
+  function panelOpen() { return els.overlay.classList.contains("open"); }
+  function openPanel() {
+    renderHost();
+    els.overlay.classList.add("open");
+    setTimeout(function () { (host.room ? els.unlock.disabled ? $("buzzClose") : els.unlock : els.start).focus(); }, 50);
+  }
+  function closePanel() {
+    els.overlay.classList.remove("open");
+    if (!els.note.classList.contains("err")) return;
+    note("");
+  }
+
+  els.btn.addEventListener("click", openPanel);
+  $("buzzClose").addEventListener("click", closePanel);
+  els.overlay.addEventListener("click", function (e) { if (e.target === els.overlay) closePanel(); });
+  els.start.addEventListener("click", activate);
+  els.unlock.addEventListener("click", unlock);
+  els.toggle.addEventListener("click", toggleEnabled);
+  $("buzzStop").addEventListener("click", stopHost);
+  $("hitUnlock").addEventListener("click", unlock);
+  $("hitClose").addEventListener("click", hideHit);
+
+  // Reprise d'une salle encore valide après un rechargement de la page
+  function restoreHost() {
+    if (host.room) return;
+    var saved = readJson(HOST_KEY);
+    if (!saved || !/^[A-Z]{4}$/.test(saved.code) || !saved.token || !(saved.expiresAt > Date.now()) || !CONFIGURED) {
+      writeJson(HOST_KEY, null);
+      return;
+    }
+    host.room = saved;
+    host.lastHit = saved.lastHit || "";
+    connectHost();
+    publishNow();
+  }
+
+  /* ================= Buzzer écran partagé (sans réseau) ================= */
+  var shared = { el: $("shared"), hand: null };
+  function renderShared() {
+    if (shared.hand) shared.el.setAttribute("data-hand", shared.hand);
+    else shared.el.removeAttribute("data-hand");
+    ["ketchup", "mayo"].forEach(function (t) {
+      $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent =
+        !shared.hand ? "Touchez pour buzzer" : (shared.hand === t ? "À vous !" : "Trop tard");
+    });
+  }
+  function openShared() {
+    closePanel();
+    shared.hand = null;
+    renderShared();
+    shared.el.hidden = false;
+  }
+  function closeShared() { shared.el.hidden = true; }
+  Array.prototype.forEach.call(shared.el.querySelectorAll(".shared-half"), function (half) {
+    half.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      if (shared.hand) return; // verrouillé jusqu'au déblocage
+      shared.hand = half.getAttribute("data-hand");
+      renderShared();
+      M.buzzSound(shared.hand);
+    });
+  });
+  $("sharedUnlock").addEventListener("click", function () { shared.hand = null; renderShared(); M.blip(); });
+  $("sharedQuit").addEventListener("click", closeShared);
+  $("sharedStart").addEventListener("click", openShared);
+  $("sharedStart2").addEventListener("click", openShared);
+
+  // Clavier côté présentateur (B = buzzers, Échap = fermer, Espace = débloquer)
+  M.keyHook = function (e) {
+    var k = e.key;
+    if (!shared.el.hidden) {
+      if (k === "Escape") closeShared();
+      else if (k === " " || k === "Enter") { e.preventDefault(); shared.hand = null; renderShared(); }
+      return true;
+    }
+    if (!els.hit.hidden) {
+      if (k === "Escape") hideHit();
+      else if (k.toLowerCase() === "b") unlock();
+      else return false; // les points restent au clavier
+      return true;
+    }
+    if (panelOpen()) {
+      if (k === "Escape") closePanel();
+      return true;
+    }
+    if (k.toLowerCase() === "b" && !e.shiftKey && $("welcome").hidden) { openPanel(); return true; }
+    return false;
+  };
+
+  /* ================= Appareil buzzer ================= */
+  var bz = { code: "", team: null, row: null, link: null, net: "connecting", pending: false, question: null, tab: "buzz", expiry: null };
+  var B = {
+    app: $("bzApp"), join: $("bzJoin"), play: $("bzPlay"), input: $("bzCode"), msg: $("bzJoinMsg"),
+    room: $("bzRoom"), net: $("bzNet"), button: $("bzButton"), state: $("bzState"),
+    tabBuzz: $("bzTabBuzz"), tabRecap: $("bzTabRecap"), main: $("bzMain"), recap: $("bzRecap")
+  };
+
+  function showJoin(message, isErr) {
+    stopBuzzer();
+    B.app.className = "bz";
+    B.app.hidden = false;
+    B.play.hidden = true;
+    B.join.hidden = false;
+    B.msg.textContent = message || "";
+    B.msg.style.color = isErr ? "" : "var(--creme)";
+    var saved = readJson(BUZZER_KEY) || {};
+    if (!B.input.value && saved.code) B.input.value = cleanCode(saved.code);
+  }
+  function stopBuzzer() {
+    if (bz.link) bz.link.stop();
+    bz.link = null;
+    clearTimeout(bz.expiry);
+  }
+
+  function join(t) {
+    var code = cleanCode(B.input.value);
+    B.input.value = code;
+    if (code.length !== 4) { B.msg.textContent = "Le code de la salle fait 4 lettres."; B.msg.style.color = ""; B.input.focus(); return; }
+    if (!CONFIGURED) { B.msg.textContent = "Les buzzers connectés ne sont pas configurés sur cette appli."; B.msg.style.color = ""; return; }
+    B.input.blur();
+    B.msg.textContent = "Connexion…";
+    B.msg.style.color = "var(--creme)";
+    setJoinBusy(true);
+    fetchRoom(code).then(function (row) {
+      if (!row || row.closed) {
+        B.msg.textContent = "Salle introuvable ou expirée. Vérifiez le code auprès du présentateur.";
+        B.msg.style.color = "";
+        return;
+      }
+      writeJson(BUZZER_KEY, { code: code, team: t });
+      startPlay(code, t, row);
+    }).catch(function () {
+      B.msg.textContent = "Serveur injoignable. Vérifiez votre connexion et réessayez.";
+      B.msg.style.color = "";
+    }).then(function () { setJoinBusy(false); });
+  }
+  function setJoinBusy(busy) {
+    Array.prototype.forEach.call(B.join.querySelectorAll("[data-join]"), function (b) { b.disabled = busy; });
+  }
+
+  function startPlay(code, t, row) {
+    bz.code = code;
+    bz.team = t;
+    bz.row = null;
+    bz.pending = false;
+    bz.question = null;
+    bz.net = "connecting";
+    B.app.className = "bz team-" + t;
+    B.join.hidden = true;
+    B.play.hidden = false;
+    B.room.innerHTML = "";
+    var b = document.createElement("b");
+    b.textContent = code;
+    B.room.appendChild(b);
+    B.room.appendChild(document.createTextNode(" · " + TEAMS[t]));
+    setTab("buzz");
+    onBuzzerRow(row);
+    bz.link = RoomLink(code, onBuzzerRow, function (net) { bz.net = net; renderBuzzer(); });
+  }
+
+  function onBuzzerRow(row) {
+    if (!row || row.closed) {
+      showJoin("La salle a été fermée par le présentateur, ou a expiré.", true);
+      return;
+    }
+    // Une réponse plus ancienne que ce qu'on sait déjà (réseau lent) est ignorée
+    if (bz.row && Date.parse(row.updated_at) < Date.parse(bz.row.updated_at)) return;
+    if (!bz.row || bz.row.question !== row.question) bz.pending = false;
+    bz.row = row;
+    clearTimeout(bz.expiry);
+    var left = Date.parse(row.expires_at) - Date.now();
+    if (left > 0) bz.expiry = setTimeout(function () { if (bz.link) bz.link.refresh(); }, Math.min(left + 2000, 2147483000));
+    renderBuzzer();
+    renderRecap();
+  }
+
+  function buzzerState() {
+    var row = bz.row;
+    if (!row) return "wait";
+    if (bz.net === "offline") return "offline";
+    if (!row.buzzers_enabled) return "paused";
+    var who = team(row.buzzed_team);
+    if (who) return who === bz.team ? "mine" : "late";
+    return bz.pending ? "pending" : "ready";
+  }
+  var BUTTON_TEXT = { wait: "…", offline: "Hors ligne", paused: "En pause", mine: "À vous !", late: "Trop tard", pending: "Buzz !", ready: "Buzz !" };
+  function renderBuzzer() {
+    if (B.play.hidden) return;
+    var st = buzzerState();
+    B.play.setAttribute("data-state", st);
+    B.button.textContent = BUTTON_TEXT[st];
+    B.button.disabled = st !== "ready";
+    var who = bz.row && team(bz.row.buzzed_team);
+    B.state.textContent = {
+      wait: "Connexion à la salle…",
+      offline: "Connexion perdue. Reconnexion automatique…",
+      paused: "Buzzers en pause pour le moment.",
+      mine: "Votre équipe a la main !",
+      late: who ? TEAMS[who] + " a buzzé avant vous." : "",
+      pending: "…",
+      ready: "Au premier qui buzze !"
+    }[st];
+    setNet(B.net, bz.net === "online" ? "online" : (bz.net === "offline" ? "offline" : "connecting"),
+      bz.net === "online" ? "En ligne" : (bz.net === "offline" ? "Hors ligne" : "Connexion…"));
+  }
+
+  function press() {
+    if (buzzerState() !== "ready") return;
+    var row = bz.row, code = bz.code, t = bz.team;
+    bz.pending = true;
+    renderBuzzer();
+    rpc("buzz", { p_code: code, p_team: t, p_question: row.question }).then(function (won) {
+      if (bz.code !== code) return;
+      if (won && bz.row && bz.row.question === row.question) {
+        // Le serveur a donné la main à ce buzzer : on l'affiche sans attendre le temps réel
+        bz.row = Object.assign({}, bz.row, { buzzed_team: t });
+        M.blip();
+      }
+      bz.pending = false;
+      renderBuzzer();
+      if (bz.link) bz.link.refresh();
+    }).catch(function () {
+      if (bz.code !== code) return;
+      bz.pending = false;
+      bz.net = "offline";
+      renderBuzzer();
+      if (bz.link) bz.link.kick();
+    });
+  }
+
+  // Récap en lecture seule : on ne fait confiance à rien de ce qui arrive du réseau
+  function cleanRecap(r) {
+    if (!r || typeof r !== "object" || !r.scores) return null;
+    var n = M.rounds.length;
+    var g = {
+      scores: { ketchup: int(r.scores.ketchup, 0, 9999), mayo: int(r.scores.mayo, 0, 9999) },
+      goal: int(r.goal, 1, 999) || 25,
+      round: int(r.round, 0, n - 1),
+      bdm: { team: team(r.bdm && r.bdm.team) || "ketchup", count: int(r.bdm && r.bdm.count, 0, 10), best: { ketchup: 0, mayo: 0 } },
+      perRound: { ketchup: [], mayo: [] }
+    };
+    ["ketchup", "mayo"].forEach(function (t) {
+      var arr = (r.perRound && Array.isArray(r.perRound[t])) ? r.perRound[t] : [];
+      for (var i = 0; i < n; i++) g.perRound[t].push(int(arr[i], -9999, 9999));
+      g.bdm.best[t] = int(r.bdm && r.bdm.best && r.bdm.best[t], 0, 10);
+    });
+    return g;
+  }
+  function renderRecap() {
+    if (bz.tab !== "recap") return;
+    var g = cleanRecap(bz.row && bz.row.recap);
+    B.recap.innerHTML = "";
+    if (!g) {
+      var p = document.createElement("p");
+      p.className = "bz-empty";
+      p.textContent = "Le présentateur n'a encore rien publié.";
+      B.recap.appendChild(p);
+      return;
+    }
+    var sum = document.createElement("div");
+    sum.className = "bz-sum";
+    sum.innerHTML = '<div class="welcome-team k"><div class="welcome-name">Ketchup</div><div class="tiles welcome-score"></div></div>' +
+      '<div class="welcome-dash" aria-hidden="true">–</div>' +
+      '<div class="welcome-team m"><div class="welcome-name">Mayo</div><div class="tiles welcome-score"></div></div>';
+    var scores = sum.querySelectorAll(".welcome-score");
+    M.scoreTiles(scores[0], g.scores.ketchup, ["t-r", "t-c"]);
+    M.scoreTiles(scores[1], g.scores.mayo, ["t-j", "t-b"]);
+    B.recap.appendChild(sum);
+
+    var facts = document.createElement("ul");
+    facts.className = "bz-facts";
+    var add = function (label, value) {
+      var li = document.createElement("li");
+      li.appendChild(document.createTextNode(label + " "));
+      var s = document.createElement("span");
+      s.textContent = value;
+      li.appendChild(s);
+      facts.appendChild(li);
+    };
+    add("Manche " + (g.round + 1) + " / " + M.rounds.length + " ·", M.rounds[g.round].name);
+    add("Objectif", g.goal + " Miams");
+    if (g.round === M.bdmIndex) {
+      add("Burger de la Mort ·", TEAMS[g.bdm.team] + " " + g.bdm.count + " / 10");
+    }
+    B.recap.appendChild(facts);
+
+    var card = document.createElement("div");
+    card.className = "card recap-card";
+    card.innerHTML = M.recapHtml(g); // nombres bornés et noms tirés de la liste des manches
+    B.recap.appendChild(card);
+  }
+  function setTab(tab) {
+    bz.tab = tab;
+    B.tabBuzz.setAttribute("aria-selected", String(tab === "buzz"));
+    B.tabRecap.setAttribute("aria-selected", String(tab === "recap"));
+    B.main.hidden = tab !== "buzz";
+    B.recap.hidden = tab !== "recap";
+    renderRecap();
+  }
+
+  B.input.addEventListener("input", function () {
+    var v = cleanCode(B.input.value);
+    if (v !== B.input.value) B.input.value = v;
+  });
+  Array.prototype.forEach.call(B.join.querySelectorAll("[data-join]"), function (b) {
+    b.addEventListener("click", function () { join(b.getAttribute("data-join")); });
+  });
+  $("bzBack").addEventListener("click", function () {
+    stopBuzzer();
+    B.app.hidden = true;
+    M.showRoleScreen();
+  });
+  $("bzQuit").addEventListener("click", function () { showJoin(""); });
+  // pointerdown : réagit dès le contact, sans attendre que le doigt se lève
+  B.button.addEventListener("pointerdown", function (e) { e.preventDefault(); press(); });
+  B.button.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); press(); } });
+  B.tabBuzz.addEventListener("click", function () { setTab("buzz"); });
+  B.tabRecap.addEventListener("click", function () { setTab("recap"); });
+
+  /* ================= Choix du rôle ================= */
+  document.addEventListener("miams:role", function (e) {
+    if (e.detail === "host") {
+      restoreHost();
+      renderHost();
+    } else if (e.detail === "buzzer") {
+      showJoin("");
+      if (!CONFIGURED) B.msg.textContent = "Les buzzers connectés ne sont pas configurés sur cette appli.";
+    }
+  });
+
+  // Arrivée par le QR code (?salle=ABCD) : directement sur l'écran buzzer, code prérempli
+  var fromUrl = cleanCode(new URLSearchParams(location.search).get("salle"));
+  if (fromUrl.length === 4) {
+    B.input.value = fromUrl;
+    M.chooseRole("buzzer");
+    try { history.replaceState(null, "", location.pathname); } catch (e) { /* ignore */ }
+    var savedBz = readJson(BUZZER_KEY);
+    B.msg.textContent = savedBz && savedBz.code === fromUrl ? "Touchez votre équipe pour revenir dans la salle." : "Choisissez votre équipe.";
+    B.msg.style.color = "var(--creme)";
+  }
+})();

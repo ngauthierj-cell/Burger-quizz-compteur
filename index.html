@@ -883,6 +883,160 @@
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1) rotate(-2deg); }
 
+  /* ================= Buzzers ================= */
+  /* Bouton du bandeau : jaune quand la salle est en ligne, point rouge si la connexion tombe */
+  .buzz-btn { position: relative; }
+  .buzz-btn.on { background: var(--jaune); }
+  /* Une équipe a la main : le bouton prend sa couleur (B pour débloquer) */
+  .buzz-btn.hand-ketchup { background: var(--rouge); color: var(--creme); }
+  .buzz-btn.hand-mayo { background: var(--jaune); box-shadow: 0 0 0 3px var(--rouge); }
+  .buzz-btn .buzz-dot { display: none; position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--rouge); border: 2px solid var(--noir); }
+  .buzz-btn.warn .buzz-dot { display: block; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Écran de choix : présentateur ou buzzer */
+  .welcome-go small, .welcome-new small { display: block; font-family: var(--typo); font-weight: 400; font-size: .5em; letter-spacing: .02em; text-transform: none; opacity: .75; margin-top: .3em; }
+  .role-lead { font-family: var(--typo); font-size: clamp(16px, 2.8vmin, 30px); color: var(--creme); }
+
+  /* Panneau du présentateur */
+  .buzz-card { width: min(100%, 640px); max-height: calc(100% - 20px); overflow-y: auto; }
+  .buzz-card .actions { margin-top: 12px; }
+  .buzz-card .actions.col { flex-direction: column; }
+  .buzz-card .actions.col button { flex: none; }
+  .buzz-card .actions small { display: block; font-family: var(--typo); font-weight: 400; font-size: .6em; letter-spacing: 0; text-transform: none; margin-top: .2em; }
+  .buzz-note { font-family: var(--typo) !important; font-size: clamp(14px, 2.2vmin, 22px) !important; color: var(--brun); }
+  .buzz-note.err { color: var(--rouge-fonce); }
+  .buzz-note:empty { display: none; }
+  .net-status { display: inline-flex; align-items: center; gap: .5em; font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(14px, 2.2vmin, 22px); }
+  .net-status i { width: .8em; height: .8em; border-radius: 50%; background: var(--gris); }
+  .net-status[data-net="online"] i { background: #3aa655; }
+  .net-status[data-net="offline"] i { background: var(--rouge); animation: blink 1s steps(2) infinite; }
+  .buzz-room { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: clamp(12px, 3vmin, 30px); margin: 10px 0; }
+  .buzz-label { font-family: var(--typo); font-size: clamp(13px, 2vmin, 20px); color: var(--brun); letter-spacing: .1em; text-transform: uppercase; margin-bottom: .2em; }
+  .buzz-code { font-size: clamp(48px, 12vmin, 120px); flex-wrap: nowrap; }
+  .buzz-qr { width: clamp(130px, 26vmin, 220px); }
+  .buzz-qr svg { display: block; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 0 0 3px var(--noir); }
+  .buzz-state { font-family: var(--slab); font-size: clamp(20px, 3.6vmin, 40px); margin: 6px 0; }
+  .buzz-state.k { color: var(--rouge); }
+  .buzz-state.m { color: var(--jaune-fonce); }
+
+  /* Une équipe a la main (côté présentateur) */
+  .hit {
+    position: fixed; inset: 0; z-index: 60;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(10px, 3vmin, 30px);
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+    text-align: center;
+    background-image: repeating-linear-gradient(135deg, rgba(0,0,0,.12) 0 clamp(18px, 3vmin, 40px), transparent clamp(18px, 3vmin, 40px) clamp(36px, 6vmin, 80px));
+  }
+  .hit[hidden] { display: none; }
+  .hit.ketchup { background-color: var(--rouge); color: var(--creme); }
+  .hit.mayo { background-color: var(--jaune); color: var(--noir); }
+  .hit-team { font-family: var(--slab); font-size: clamp(64px, 20vmin, 260px); line-height: .95; text-transform: uppercase; animation: bump .5s cubic-bezier(.3,1.6,.5,1); }
+  .hit.ketchup .hit-team { text-shadow: .05em .05em 0 var(--rouge-fonce); }
+  .hit.mayo .hit-team { text-shadow: .05em .05em 0 var(--jaune-fonce); }
+  .hit-sub { font-family: var(--typo); font-size: clamp(22px, 5vmin, 60px); }
+  .hit-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; width: min(100%, 720px); }
+  .hit-actions button { flex: 1 1 220px; border: 0; border-radius: 14px; padding: clamp(14px, 2.6vmin, 26px); font-family: var(--cond); font-weight: 700; font-size: clamp(18px, 3vmin, 34px); text-transform: uppercase; letter-spacing: .05em; background: var(--noir); color: var(--creme); box-shadow: 0 5px 0 rgba(0,0,0,.45); }
+  .hit-actions button.alt { background: transparent; color: inherit; border: 3px solid currentColor; box-shadow: none; }
+  .hit-actions button:active { transform: translateY(3px); }
+
+  /* Bandeau « hors ligne » du présentateur : n'empêche pas de compter */
+  .net-banner {
+    position: fixed; left: 50%; top: max(8px, env(safe-area-inset-top)); z-index: 45; transform: translateX(-50%);
+    max-width: calc(100% - 24px); padding: .45em 1em; border-radius: 10px;
+    background: var(--noir); color: var(--creme); box-shadow: 0 0 0 3px var(--rouge), 0 8px 20px rgba(0,0,0,.4);
+    font-family: var(--cond); font-weight: 700; font-size: clamp(13px, 2vmin, 20px); text-align: center; pointer-events: none;
+  }
+  .net-banner[hidden] { display: none; }
+
+  /* Appareil buzzer */
+  .bz { position: fixed; inset: 0; z-index: 75; display: grid; padding: var(--frame); background-color: var(--jaune);
+    background-image: repeating-linear-gradient(135deg, var(--rouge) 0 clamp(18px, 3vmin, 40px), var(--jaune) clamp(18px, 3vmin, 40px) clamp(36px, 6vmin, 80px)); }
+  .bz[hidden], .bz [hidden] { display: none !important; }
+  .bz.team-ketchup { background-image: repeating-linear-gradient(135deg, var(--rouge) 0 clamp(18px, 3vmin, 40px), var(--rouge-fonce) clamp(18px, 3vmin, 40px) clamp(36px, 6vmin, 80px)); }
+  .bz.team-mayo { background-image: repeating-linear-gradient(135deg, var(--jaune) 0 clamp(18px, 3vmin, 40px), var(--jaune-fonce) clamp(18px, 3vmin, 40px) clamp(36px, 6vmin, 80px)); }
+  .bz-label { font-family: var(--typo); font-size: clamp(14px, 2.4vmin, 24px); color: var(--creme); letter-spacing: .08em; }
+  .bz-code-input {
+    width: min(100%, 360px); justify-self: center; margin: 0 auto;
+    border: 0; border-radius: 14px; padding: .15em .3em; text-align: center;
+    font-family: var(--slab); font-size: clamp(48px, 13vmin, 110px); letter-spacing: .2em; text-transform: uppercase;
+    background: var(--creme); color: var(--noir); box-shadow: inset 0 4px 0 rgba(0,0,0,.15);
+    -webkit-user-select: text; user-select: text;
+  }
+  .bz-code-input::placeholder { color: var(--creme-2); }
+  .bz-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .bz-team { border: 0; border-radius: 16px; padding: clamp(18px, 4vmin, 34px) 8px; font-family: var(--slab); font-size: clamp(24px, 6vmin, 52px); }
+  .bz-team.k { background: var(--rouge); color: var(--creme); box-shadow: 0 6px 0 var(--rouge-fonce); }
+  .bz-team.m { background: var(--jaune); color: var(--noir); box-shadow: 0 6px 0 var(--jaune-fonce); }
+  .bz-team:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.4); }
+  .bz-team:disabled { opacity: .5; }
+  .bz-msg { font-family: var(--typo); font-size: clamp(15px, 2.6vmin, 24px); color: var(--jaune); min-height: 1.3em; margin: 0; }
+
+  .bz-play {
+    background: var(--noir); border-radius: calc(var(--radius) + 6px); min-height: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .bz-top { display: flex; align-items: center; gap: 10px; }
+  .bz-room { flex: 1; min-width: 0; font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 3vmin, 26px); letter-spacing: .06em; text-transform: uppercase; color: var(--creme); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bz-room b { font-family: var(--slab); font-weight: 400; color: var(--jaune); letter-spacing: .12em; }
+  .bz-play .net-status { color: var(--creme); font-size: clamp(12px, 2vmin, 18px); }
+  .bz-quit { border: 2px solid var(--creme); background: transparent; color: var(--creme); border-radius: 10px; padding: 6px 12px; font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .bz-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--noir-2); border-radius: 14px; padding: 5px; }
+  .bz-tabs button { border: 0; border-radius: 10px; padding: 12px 8px; background: transparent; color: var(--gris); font-family: var(--cond); font-weight: 700; font-size: clamp(17px, 3vmin, 26px); letter-spacing: .08em; text-transform: uppercase; }
+  .bz-tabs button[aria-selected="true"] { background: var(--creme); color: var(--noir); }
+  .bz-main { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(14px, 3vmin, 30px); }
+  .bz-button {
+    --c: var(--rouge); --c-dark: var(--rouge-fonce); --ink: var(--creme);
+    width: min(78vw, 52vh, 460px); aspect-ratio: 1; border-radius: 50%;
+    border: clamp(10px, 2.4vmin, 18px) solid var(--creme-2);
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45) 0 12%, transparent 13%), var(--c);
+    color: var(--ink);
+    box-shadow: 0 0 0 6px var(--noir), 0 clamp(10px, 2.4vmin, 18px) 0 6px var(--c-dark), 0 22px 40px rgba(0,0,0,.6);
+    font-family: var(--slab); font-size: clamp(42px, 12vmin, 96px); line-height: 1;
+    transition: transform .08s, box-shadow .08s, filter .2s;
+  }
+  .team-mayo .bz-button { --c: var(--jaune); --c-dark: var(--jaune-fonce); --ink: var(--noir); }
+  .bz-button:active:not(:disabled), .bz-play[data-state="pending"] .bz-button { transform: translateY(clamp(8px, 2vmin, 14px)); box-shadow: 0 0 0 6px var(--noir), 0 2px 0 6px var(--c-dark), 0 8px 16px rgba(0,0,0,.6); }
+  .bz-play[data-state="mine"] .bz-button { animation: glow-ring .7s ease-in-out infinite alternate; }
+  @keyframes glow-ring { to { box-shadow: 0 0 0 6px var(--noir), 0 0 0 22px var(--c), 0 0 60px 30px var(--c); } }
+  .bz-play[data-state="late"] .bz-button, .bz-play[data-state="paused"] .bz-button, .bz-play[data-state="offline"] .bz-button, .bz-play[data-state="wait"] .bz-button { filter: grayscale(.85) brightness(.6); font-size: clamp(30px, 8vmin, 64px); }
+  .bz-state { font-family: var(--typo); font-size: clamp(18px, 3.6vmin, 34px); color: var(--creme); text-align: center; min-height: 2.4em; }
+  .bz-recap { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .bz-recap .card { transform: none; box-shadow: none; width: 100%; padding: clamp(14px, 3vmin, 30px); }
+  .bz-sum { display: flex; justify-content: center; align-items: flex-end; gap: clamp(10px, 3vmin, 28px); text-align: center; }
+  .bz-sum .welcome-score { font-size: clamp(40px, 11vmin, 90px); }
+  .bz-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 3vmin, 26px); color: var(--creme); text-align: center; text-transform: uppercase; letter-spacing: .05em; }
+  .bz-facts span { color: var(--jaune); }
+  .bz-empty { font-family: var(--typo); color: var(--gris); text-align: center; margin: 2em 0; }
+
+  /* Buzzer écran partagé (sans réseau) */
+  .shared { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: var(--noir); }
+  .shared[hidden] { display: none; }
+  .shared-half {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2em;
+    touch-action: none; cursor: pointer; text-align: center; padding: 16px;
+    transition: filter .2s;
+  }
+  .shared-half.k { background: var(--rouge); color: var(--creme); }
+  .shared-half.m { background: var(--jaune); color: var(--noir); }
+  /* Téléphone posé à plat entre les deux équipes : la moitié du haut se lit de l'autre côté */
+  .shared-half.k > * { transform: rotate(180deg); }
+  .shared-name { font-family: var(--slab); font-size: clamp(44px, 12vmin, 140px); line-height: 1; }
+  .shared-msg { font-family: var(--typo); font-size: clamp(18px, 4vmin, 44px); }
+  .shared[data-hand] .shared-half { filter: grayscale(.85) brightness(.5); }
+  .shared[data-hand="ketchup"] .shared-half.k, .shared[data-hand="mayo"] .shared-half.m { filter: none; box-shadow: inset 0 0 0 clamp(8px, 2vmin, 16px) var(--creme), inset 0 0 60px rgba(0,0,0,.35); }
+  .shared-bar { flex: none; display: flex; gap: 10px; padding: 10px max(10px, env(safe-area-inset-left)); background: var(--noir); }
+  .shared-bar button { flex: 1; border: 0; border-radius: 12px; padding: 14px; font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 3vmin, 28px); text-transform: uppercase; letter-spacing: .05em; }
+  .shared-unlock { background: var(--creme); color: var(--noir); box-shadow: 0 4px 0 #c4b38d; }
+  .shared-quit { flex: 0 1 auto !important; background: transparent; color: var(--creme); border: 2px solid var(--creme) !important; }
+  @media (orientation: landscape) {
+    .shared { flex-direction: row; }
+    .shared-half.k > * { transform: none; }
+    .shared-bar { flex-direction: column; justify-content: center; width: clamp(130px, 18vw, 220px); padding: 10px; }
+    .shared-bar button { flex: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
@@ -896,6 +1050,14 @@
       <span class="tiles brand-tiles" aria-label="Miams"><span class="tile t-b" aria-hidden="true">M</span><span class="tile t-r" aria-hidden="true">I</span><span class="tile t-j" aria-hidden="true">A</span><span class="tile t-c" aria-hidden="true">M</span><span class="tile t-b" aria-hidden="true">S</span></span>
     </h1>
     <div class="tools">
+      <button class="icon-btn buzz-btn" id="buzzersBtn" aria-label="Buzzers" title="Buzzers (B)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 13a7 7 0 0 1 14 0" fill="currentColor"/>
+          <path d="M3 13h18v3.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5z"/>
+          <path d="M12 3v2.5"/>
+        </svg>
+        <i class="buzz-dot" aria-hidden="true"></i>
+      </button>
       <button class="icon-btn" id="soundBtn" aria-label="Couper le son" title="Son (S)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
@@ -1045,6 +1207,114 @@
   </div>
 </div>
 
+<!-- Écran de choix, affiché à chaque lancement -->
+<div class="welcome" id="roleScreen" role="dialog" aria-modal="true" aria-labelledby="roleTitle" hidden>
+  <div class="welcome-panel">
+    <div class="brand-kicker">Compteur de</div>
+    <div class="tiles welcome-title" aria-hidden="true"><span class="tile t-b">M</span><span class="tile t-r">I</span><span class="tile t-j">A</span><span class="tile t-c">M</span><span class="tile t-b">S</span></div>
+    <div class="role-lead" id="roleTitle">Qui tient cet appareil&nbsp;?</div>
+    <button class="welcome-go" id="roleHost">Présentateur<small>Compter les Miams</small></button>
+    <button class="welcome-new" id="roleBuzzer">Rejoindre en tant que buzzer<small>Avec le code donné par le présentateur</small></button>
+  </div>
+</div>
+
+<!-- Appareil buzzer : choix de la salle et de l'équipe, puis le gros bouton -->
+<div class="bz" id="bzApp" hidden>
+  <div class="welcome-panel" id="bzJoin">
+    <div class="tiles welcome-title" aria-hidden="true"><span class="tile t-r">B</span><span class="tile t-j">U</span><span class="tile t-c">Z</span><span class="tile t-b">Z</span></div>
+    <label class="bz-label" for="bzCode">Code de la salle</label>
+    <input class="bz-code-input" id="bzCode" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done" placeholder="ABCD">
+    <div class="bz-label">Votre équipe</div>
+    <div class="bz-teams">
+      <button class="bz-team k" data-join="ketchup">Ketchup</button>
+      <button class="bz-team m" data-join="mayo">Mayo</button>
+    </div>
+    <p class="bz-msg" id="bzJoinMsg" role="status" aria-live="polite"></p>
+    <button class="welcome-new" id="bzBack">Retour</button>
+  </div>
+  <div class="bz-play" id="bzPlay" data-state="wait" hidden>
+    <div class="bz-top">
+      <div class="bz-room" id="bzRoom"></div>
+      <div class="net-status" id="bzNet" data-net="connecting"><i></i><span>Connexion…</span></div>
+      <button class="bz-quit" id="bzQuit">Quitter</button>
+    </div>
+    <div class="bz-tabs" role="tablist">
+      <button role="tab" id="bzTabBuzz" aria-selected="true" aria-controls="bzMain">Buzzer</button>
+      <button role="tab" id="bzTabRecap" aria-selected="false" aria-controls="bzRecap">Récap</button>
+    </div>
+    <div class="bz-main" id="bzMain" role="tabpanel">
+      <button class="bz-button" id="bzButton">Buzz&nbsp;!</button>
+      <div class="bz-state" id="bzState" aria-live="assertive"></div>
+    </div>
+    <div class="bz-recap" id="bzRecap" role="tabpanel" hidden></div>
+  </div>
+</div>
+
+<!-- Présentateur : réglages des buzzers -->
+<div class="overlay" id="buzzOverlay" role="dialog" aria-modal="true" aria-labelledby="buzzTitle">
+  <div class="card buzz-card">
+    <h2 id="buzzTitle">Buzzers</h2>
+    <div id="buzzOff">
+      <p>Chaque équipe buzze depuis ses téléphones. Les scores restent sur cet appareil.</p>
+      <div class="actions col">
+        <button class="btn-main" id="buzzStart">Activer les buzzers</button>
+        <button class="btn-alt" id="sharedStart">Buzzer écran partagé<br><small>sans réseau, sur cet appareil</small></button>
+      </div>
+    </div>
+    <div id="buzzOn" hidden>
+      <div class="net-status" id="buzzNet" data-net="connecting"><i></i><span>Connexion…</span></div>
+      <div class="buzz-room">
+        <div>
+          <div class="buzz-label">Code de la salle</div>
+          <div class="tiles buzz-code" id="buzzCode"></div>
+        </div>
+        <div class="buzz-qr" id="buzzQr"></div>
+      </div>
+      <div class="buzz-state" id="buzzState" aria-live="polite"></div>
+      <div class="actions">
+        <button class="btn-main" id="buzzUnlock">Débloquer les buzzers</button>
+        <button class="btn-alt" id="buzzToggle">Mettre en pause</button>
+      </div>
+      <div class="actions">
+        <button class="btn-alt" id="sharedStart2">Écran partagé</button>
+        <button class="btn-alt" id="buzzStop">Désactiver le mode</button>
+      </div>
+    </div>
+    <p class="buzz-note" id="buzzNote" role="status"></p>
+    <div class="actions">
+      <button class="btn-main" id="buzzClose">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Présentateur : une équipe a la main -->
+<div class="hit ketchup" id="buzzHit" role="alertdialog" aria-labelledby="hitTeam" hidden>
+  <div class="hit-team" id="hitTeam">Ketchup</div>
+  <div class="hit-sub">a la main&nbsp;!</div>
+  <div class="hit-actions">
+    <button id="hitUnlock">Débloquer les buzzers</button>
+    <button class="alt" id="hitClose">Fermer</button>
+  </div>
+</div>
+
+<div class="net-banner" id="netBanner" role="status" hidden>Buzzers hors ligne · reconnexion… Le compteur continue en local.</div>
+
+<!-- Buzzer écran partagé : aucun réseau requis -->
+<div class="shared" id="shared" hidden>
+  <div class="shared-half k" data-hand="ketchup" role="button" aria-label="Buzzer Ketchup">
+    <div class="shared-name">Ketchup</div>
+    <div class="shared-msg" id="sharedMsgK">Touchez pour buzzer</div>
+  </div>
+  <div class="shared-bar">
+    <button class="shared-unlock" id="sharedUnlock">Débloquer</button>
+    <button class="shared-quit" id="sharedQuit">Quitter</button>
+  </div>
+  <div class="shared-half m" data-hand="mayo" role="button" aria-label="Buzzer Mayo">
+    <div class="shared-name">Mayo</div>
+    <div class="shared-msg" id="sharedMsgM">Touchez pour buzzer</div>
+  </div>
+</div>
+
 <div class="announce" id="announce" aria-hidden="true">
   <div class="announce-plate">
     <div class="announce-num" id="announceNum">Manche 1</div>
@@ -1172,6 +1442,8 @@
   function save() {
     touchActive();
     try { window.localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+    // Le mode buzzers (s'il est actif) republie le récap dans la salle
+    try { document.dispatchEvent(new CustomEvent("miams:save")); } catch (e) { /* ignore */ }
   }
   function clampInt(v, min, max, fallback) {
     var n = parseInt(v, 10);
@@ -1829,7 +2101,7 @@
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "hidden") {
       touchActive(); // mémorise l'heure à laquelle on a quitté l'appli
-    } else if ($("welcome").hidden && Date.now() - state.lastActive > WELCOME_AFTER_MS) {
+    } else if (mode === "host" && $("welcome").hidden && Date.now() - state.lastActive > WELCOME_AFTER_MS) {
       if (gameFinished()) resetGame();
       else if (gameInProgress()) showWelcome();
     }
@@ -1992,6 +2264,9 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.target === els.goal || e.metaKey || e.ctrlKey || e.altKey) return;
+    // Écran de choix ou appareil buzzer : le clavier ne touche pas aux scores
+    if (mode !== "host") return;
+    if (window.Miams.keyHook && window.Miams.keyHook(e)) return;
     if (!$("welcome").hidden) {
       if (e.key === "Escape") continueGame();
       return;
@@ -2017,11 +2292,57 @@
     else return;
   });
 
+  /* ---------- Écran de choix : présentateur ou buzzer ----------
+     Affiché à chaque lancement. « Présentateur » mène au comportement habituel. */
+  var mode = "choose"; // "choose" | "host" | "buzzer"
+  function showRoleScreen() {
+    mode = "choose";
+    hideWelcome();
+    $("roleScreen").hidden = false;
+    if (window.matchMedia && window.matchMedia("(pointer: fine)").matches) setTimeout(function () { $("roleHost").focus(); }, 50);
+  }
+  function chooseRole(role) {
+    $("roleScreen").hidden = true;
+    mode = role;
+    if (role === "host") {
+      audio(); // le son du buzzer devra pouvoir sonner sans geste de l'utilisateur
+      // Proposer de reprendre la partie en cours (sans son).
+      // Partie terminée (Grand Burger) : on la range et on démarre une partie neuve, sans son.
+      if (gameFinished()) resetGame();
+      else if (gameInProgress()) showWelcome();
+    }
+    try { document.dispatchEvent(new CustomEvent("miams:role", { detail: role })); } catch (e) { /* ignore */ }
+  }
+  $("roleHost").addEventListener("click", function () { chooseRole("host"); });
+  $("roleBuzzer").addEventListener("click", function () { chooseRole("buzzer"); });
+
+  // Ce dont le mode buzzers (buzzers.js) a besoin, sans toucher à la partie
+  window.Miams = {
+    rounds: ROUNDS,
+    teams: TEAMS,
+    bdmIndex: BDM_INDEX,
+    mode: function () { return mode; },
+    chooseRole: chooseRole,
+    showRoleScreen: showRoleScreen,
+    snapshot: function () {
+      return {
+        scores: { ketchup: state.scores.ketchup, mayo: state.scores.mayo },
+        goal: state.goal,
+        round: state.round,
+        bdm: { team: state.bdm.team, count: state.bdm.count, best: { ketchup: state.bdm.best.ketchup, mayo: state.bdm.best.mayo } },
+        perRound: { ketchup: state.perRound.ketchup.slice(), mayo: state.perRound.mayo.slice() }
+      };
+    },
+    recapHtml: recapHtml,
+    scoreTiles: scoreTiles,
+    buzzSound: function (team) { buzz(team, true); },
+    blip: blip,
+    toast: toast,
+    keyHook: null
+  };
+
   render();
-  // À l'ouverture : proposer de reprendre la partie en cours (sans son)
-  // Partie terminée (Grand Burger) : on la range et on démarre une partie neuve, sans son.
-  if (gameFinished()) resetGame();
-  else if (gameInProgress()) showWelcome();
+  showRoleScreen();
 
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", function () {
@@ -2030,5 +2351,10 @@
   }
 })();
 </script>
+<!-- Mode buzzers (facultatif). config.js est créé au déploiement ; s'il manque,
+     l'appli marche comme avant et seul le mode « buzzers connectés » est indisponible. -->
+<script src="config.js"></script>
+<script src="qr.js"></script>
+<script src="buzzers.js"></script>
 </body>
 </html>

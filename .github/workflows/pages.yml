@@ -1,0 +1,43 @@
+# Publie l'appli sur GitHub Pages, avec config.js créé à partir des secrets
+# du dépôt (SUPABASE_URL, SUPABASE_ANON_KEY). Sans ces secrets, l'appli est
+# publiée sans buzzers connectés (tout le reste marche).
+name: Publier sur GitHub Pages
+
+on:
+  push:
+    # Branche publiée (la branche par défaut du dépôt) : à adapter si elle change
+    branches: [claude/burger-quiz-app-s9g618]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Créer config.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: ./scripts/make-config.sh
+      - name: Préparer le site
+        run: |
+          mkdir _site
+          cp -r index.html sw.js manifest.webmanifest icons qr.js buzzers.js config.js vendor _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
