@@ -86,6 +86,9 @@
       .then(function (c) { return timeout(c.rpc(name, args || {})); })
       .then(function (r) { if (r.error) throw r.error; return r.data; });
   }
+  // Erreur réseau (pas de réponse) ou refus du serveur (réponse avec un code) ?
+  function isNetError(e) { return !(e && e.code); }
+  var SERVER_REFUSED = "Le serveur a refusé. Fermez puis rouvrez l'appli pour la mettre à jour.";
   function fetchRoom(code) {
     return getClient()
       .then(function (c) { return timeout(c.from("rooms").select("*").eq("code", code).maybeSingle()); })
@@ -136,6 +139,9 @@
       }).catch(function () { setNetState("offline"); schedule(); });
     }
     function kick() { if (!stopped) { retry = 0; connect(); } }
+    // Une requête a échoué faute de réseau : on passe hors ligne et on se
+    // reconnecte. L'état repasse « en ligne » tout seul à la reconnexion.
+    function lost() { if (!stopped) { setNetState("offline"); kick(); } }
     function onOnline() { kick(); }
     function onVisible() {
       if (document.visibilityState !== "visible" || stopped) return;
@@ -147,6 +153,7 @@
     return {
       refresh: refresh,
       kick: kick,
+      lost: lost,
       net: function () { return net; },
       stop: function () {
         stopped = true;
@@ -463,6 +470,12 @@
     if (team(row.buzzed_team)) return "hand";
     return sh.pending ? "pending" : "ready";
   }
+  var sharedNotice = { text: "", timer: null };
+  function showSharedNotice(text) {
+    clearTimeout(sharedNotice.timer);
+    sharedNotice.text = text;
+    sharedNotice.timer = setTimeout(function () { sharedNotice.text = ""; renderShared(); }, 6000);
+  }
   function renderShared() {
     var st = sharedState();
     var hand = !sharedOnline() ? sh.hand : (sh.row && team(sh.row.buzzed_team));
@@ -477,6 +490,7 @@
         ready: "Touchez pour buzzer",
         hand: hand === t ? "À vous !" : "Trop tard"
       }[st];
+      if (sharedNotice.text && st === "ready") $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent = sharedNotice.text;
     });
     $("sharedUnlock").hidden = sharedOnline(); // en salle, c'est le présentateur qui débloque
     $("sharedInfo").hidden = !sharedOnline();
@@ -543,12 +557,12 @@
       sh.pending = false;
       renderShared();
       if (sh.link) sh.link.refresh();
-    }).catch(function () {
+    }).catch(function (e) {
       if (sh.code !== code) return;
       sh.pending = false;
-      sh.net = "offline";
+      if (isNetError(e)) { if (sh.link) sh.link.lost(); }
+      else showSharedNotice(SERVER_REFUSED);
       renderShared();
-      if (sh.link) sh.link.kick();
     });
   }
   Array.prototype.forEach.call(sh.el.querySelectorAll(".shared-half"), function (half) {
@@ -633,8 +647,9 @@
         if (t === "both") openShared(code, row);
         else startPlay(code, t, row);
       });
-    }).catch(function () {
-      B.msg.textContent = t === "both"
+    }).catch(function (e) {
+      B.msg.textContent = !isNetError(e) ? "Le serveur des buzzers a refusé la connexion. Fermez puis rouvrez l'appli ; si ça continue, vérifiez que les 2 scripts Supabase ont été lancés."
+        : t === "both"
         ? "Serveur injoignable. Pour jouer sans réseau, effacez le code puis touchez « Les deux équipes »."
         : "Serveur injoignable. Vérifiez votre connexion et réessayez.";
       B.msg.style.color = "";
@@ -692,6 +707,12 @@
     return bz.pending ? "pending" : "ready";
   }
   var BUTTON_TEXT = { wait: "…", offline: "Hors ligne", paused: "En pause", mine: "À vous !", late: "Trop tard", pending: "Buzz !", ready: "Buzz !" };
+  var buzzerNotice = { text: "", timer: null };
+  function showBuzzerNotice(text) {
+    clearTimeout(buzzerNotice.timer);
+    buzzerNotice.text = text;
+    buzzerNotice.timer = setTimeout(function () { buzzerNotice.text = ""; renderBuzzer(); }, 6000);
+  }
   function renderBuzzer() {
     if (B.play.hidden) return;
     var st = buzzerState();
@@ -708,6 +729,7 @@
       pending: "…",
       ready: "Au premier qui buzze !"
     }[st];
+    if (buzzerNotice.text && st === "ready") B.state.textContent = buzzerNotice.text;
     setNet(B.net, bz.net === "online" ? "online" : (bz.net === "offline" ? "offline" : "connecting"),
       bz.net === "online" ? "En ligne" : (bz.net === "offline" ? "Hors ligne" : "Connexion…"));
   }
@@ -729,12 +751,12 @@
       bz.pending = false;
       renderBuzzer();
       if (bz.link) bz.link.refresh();
-    }).catch(function () {
+    }).catch(function (e) {
       if (bz.code !== code) return;
       bz.pending = false;
-      bz.net = "offline";
+      if (isNetError(e)) { if (bz.link) bz.link.lost(); }
+      else showBuzzerNotice(SERVER_REFUSED);
       renderBuzzer();
-      if (bz.link) bz.link.kick();
     });
   }
 
@@ -848,5 +870,35 @@
     var savedBz = readJson(BUZZER_KEY);
     B.msg.textContent = savedBz && savedBz.code === fromUrl ? "Touchez votre équipe pour revenir dans la salle." : "Choisissez votre équipe.";
     B.msg.style.color = "var(--creme)";
+  }
+
+  /* ================= Mise à jour de l'appli =================
+     Une nouvelle version arrive en arrière-plan. Sur un téléphone buzzer, on
+     recharge tout de suite (une ancienne version pourrait ne plus savoir buzzer)
+     et on revient dans la même salle, avec la même équipe. Le présentateur,
+     lui, n'est jamais rechargé en pleine partie : il aura la mise à jour au
+     prochain lancement. */
+  var REJOIN_KEY = "compteur-miams-rejoindre";
+  if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller, reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || reloading || M.mode() === "host") return;
+      reloading = true;
+      var again = null;
+      if (!sh.el.hidden && sh.code) again = { code: sh.code, team: "both" };
+      else if (!B.play.hidden && bz.code) again = { code: bz.code, team: bz.team };
+      try { if (again) window.sessionStorage.setItem(REJOIN_KEY, JSON.stringify(again)); } catch (e) { /* ignore */ }
+      location.reload();
+    });
+  }
+  var again = null;
+  try {
+    again = JSON.parse(window.sessionStorage.getItem(REJOIN_KEY) || "null");
+    window.sessionStorage.removeItem(REJOIN_KEY);
+  } catch (e) { again = null; }
+  if (again && /^[A-Z]{4}$/.test(again.code) && /^(ketchup|mayo|both)$/.test(again.team)) {
+    M.chooseRole("buzzer");
+    B.input.value = again.code;
+    join(again.team); // même appareil : il retrouve sa place
   }
 })();
