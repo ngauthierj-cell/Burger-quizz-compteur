@@ -166,12 +166,19 @@
   }
 
   /* ================= Présentateur ================= */
-  var host = { room: null, row: null, link: null, net: "off", lastHit: "", published: "", dirty: false, timer: null, expiry: null };
+  var host = {
+    room: null, row: null, link: null, net: "off", lastHit: "", published: "", dirty: false, timer: null, expiry: null,
+    seats: null,          // { ketchup: bool, mayo: bool }, null tant qu'on ne sait pas
+    seatsTimer: null, seatsOff: false, // seatsOff : script 003 absent, on n'affiche pas les pastilles
+    qrOpen: false         // QR redéplié à la main alors que les deux équipes sont là
+  };
   var els = {
     btn: $("buzzersBtn"), overlay: $("buzzOverlay"), off: $("buzzOff"), on: $("buzzOn"), note: $("buzzNote"),
-    net: $("buzzNet"), code: $("buzzCode"), qr: $("buzzQr"), state: $("buzzState"),
-    unlock: $("buzzUnlock"), toggle: $("buzzToggle"), start: $("buzzStart"),
-    hit: $("buzzHit"), hitTeam: $("hitTeam"), banner: $("netBanner")
+    net: $("buzzNet"), code: $("buzzCode"), qr: $("buzzQr"), state: $("buzzState"), action: $("buzzAction"), start: $("buzzStart"),
+    invite: $("buzzInvite"), fold: $("buzzFold"), unfold: $("buzzUnfold"), codeSmall: $("buzzCodeSmall"),
+    seats: $("buzzSeats"), seatK: $("seatK"), seatM: $("seatM"), expire: $("buzzExpire"),
+    bar: $("buzzBar"), barCode: $("buzzBarCode"), barDots: $("buzzBarDots"), barTxt: $("buzzBarTxt"), barBtn: $("buzzBarBtn"),
+    hit: $("buzzHit"), hitTeam: $("hitTeam")
   };
 
   function note(text, isErr) {
@@ -186,32 +193,116 @@
     return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   }
 
+  // Ce qui se passe dans la salle, vu du présentateur
+  function hostSituation() {
+    var row = host.row;
+    if (!host.room) return "off";
+    if (host.net === "offline") return "offline";
+    if (!row) return "connecting";
+    if (team(row.buzzed_team)) return "hand";
+    if (!row.buzzers_enabled) return "paused";
+    if (host.seats && !(host.seats.ketchup && host.seats.mayo)) return "waiting";
+    return "ready";
+  }
+  function missingText() {
+    var s = host.seats || {};
+    if (!s.ketchup && !s.mayo) return "des équipes";
+    return "de " + TEAMS[s.ketchup ? "mayo" : "ketchup"];
+  }
+
   function renderHost() {
-    var room = host.room, row = host.row;
+    var room = host.room, row = host.row, sit = hostSituation();
+    var who = row && team(row.buzzed_team);
     els.off.hidden = !!room;
     els.on.hidden = !room;
+    els.net.hidden = !room;
     els.btn.classList.toggle("on", !!room && host.net === "online");
     els.btn.classList.toggle("warn", !!room && host.net === "offline");
-    var hand = room && row && team(row.buzzed_team);
-    els.btn.classList.toggle("hand-ketchup", hand === "ketchup");
-    els.btn.classList.toggle("hand-mayo", hand === "mayo");
-    els.banner.hidden = !(room && host.net === "offline" && M.mode() === "host");
+    els.btn.classList.toggle("hand-ketchup", who === "ketchup");
+    els.btn.classList.toggle("hand-mayo", who === "mayo");
+    renderBar(sit, who);
     if (!room) return;
+
     setNet(els.net, host.net === "online" ? "online" : (host.net === "offline" ? "offline" : "connecting"),
-      host.net === "online" ? "Connecté" : (host.net === "offline" ? "Hors ligne · reconnexion…" : "Connexion…"));
+      host.net === "online" ? "Connecté" : (host.net === "offline" ? "Hors ligne" : "Connexion…"));
     if (els.code.getAttribute("aria-label") !== room.code) {
       tiles(els.code, room.code, ["t-r", "t-j", "t-c", "t-b"]);
+      els.codeSmall.textContent = room.code;
       els.qr.innerHTML = window.MiamsQR ? window.MiamsQR.svg(joinUrl(room.code), "#141210", "#fbf0d9") : "";
       els.qr.setAttribute("aria-label", "QR code pour rejoindre la salle " + room.code);
       els.qr.setAttribute("role", "img");
     }
-    var enabled = !row || row.buzzers_enabled;
-    var who = row && team(row.buzzed_team);
+
+    // QR replié dès que les deux équipes sont là (sauf si on l'a redéplié)
+    var both = !!(host.seats && host.seats.ketchup && host.seats.mayo);
+    var folded = both && !host.qrOpen;
+    els.invite.hidden = folded;
+    els.unfold.hidden = !folded;
+    els.fold.hidden = !both || folded;
+
+    // Pastilles des équipes
+    els.seats.hidden = !host.seats;
+    if (host.seats) {
+      [["ketchup", els.seatK], ["mayo", els.seatM]].forEach(function (p) {
+        var on = !!host.seats[p[0]];
+        p[1].classList.toggle("on", on);
+        p[1].querySelector("small").textContent = on ? "connecté" : "en attente…";
+      });
+    }
+
+    // Un seul bouton, selon la situation
     els.state.className = "buzz-state" + (who ? (who === "ketchup" ? " k" : " m") : "");
-    els.state.textContent = !row ? "" : (!enabled ? "Buzzers en pause" : (who ? TEAMS[who] + " a la main !" : "Buzzers prêts, en attente d'un buzz…"));
-    els.toggle.textContent = enabled ? "Mettre en pause" : "Réactiver les buzzers";
-    els.unlock.disabled = !who;
-    if (!els.note.classList.contains("err")) note("Salle valable jusqu'à " + timeText(room.expiresAt) + ". Les joueurs scannent le QR code ou tapent le code.");
+    els.state.innerHTML = "";
+    var line = {
+      hand: who ? TEAMS[who] + " a la main !" : "",
+      paused: "Buzzers en pause",
+      waiting: "En attente " + missingText() + "…",
+      ready: "Buzzers prêts",
+      offline: "Connexion perdue",
+      connecting: "Connexion…"
+    }[sit];
+    els.state.appendChild(document.createTextNode(line));
+    var sub = sit === "ready" ? "en attente d'un buzz" : (sit === "offline" ? "reconnexion automatique, le compteur continue en local" : "");
+    if (sub) { var sm = document.createElement("small"); sm.textContent = sub; els.state.appendChild(sm); }
+    var act = actionFor(sit);
+    els.action.hidden = !act;
+    if (act) {
+      els.action.textContent = act.long;
+      els.action.className = "buzz-action" + (act.main ? " main" : "");
+    }
+    els.expire.textContent = "Valable jusqu'à " + timeText(room.expiresAt);
+  }
+
+  // Action principale : la même dans la fenêtre et dans le bandeau
+  function actionFor(sit) {
+    if (sit === "hand") return { long: "Débloquer les buzzers", short: "Débloquer", main: true, run: unlock };
+    if (sit === "paused") return { long: "Réactiver les buzzers", short: "Reprendre", main: true, run: toggleEnabled };
+    if (sit === "ready" || sit === "waiting") return { long: "Mettre en pause", short: "Pause", main: false, run: toggleEnabled };
+    return null;
+  }
+
+  function renderBar(sit, who) {
+    var room = host.room;
+    els.bar.hidden = !room;
+    if (!room) return;
+    els.bar.className = "buzz-bar" + (sit === "offline" ? " off" : "") + (who ? " hand-" + who : "");
+    els.barCode.textContent = room.code;
+    els.barDots.hidden = !host.seats || sit === "hand";
+    if (host.seats) {
+      els.barDots.children[0].classList.toggle("on", !!host.seats.ketchup);
+      els.barDots.children[1].classList.toggle("on", !!host.seats.mayo);
+    }
+    els.barTxt.textContent = {
+      hand: who ? TEAMS[who] + " a la main !" : "",
+      paused: "Buzzers en pause",
+      waiting: "Attente " + missingText(),
+      ready: "Buzzers prêts",
+      offline: "Hors ligne · reconnexion…",
+      connecting: "Connexion…"
+    }[sit] || "";
+    var act = sit === "waiting" ? { short: "QR", run: openPanel } : actionFor(sit);
+    els.barBtn.hidden = !act;
+    if (act) { els.barBtn.textContent = act.short; els.barBtn.onclick = act.run; }
   }
 
   function showHit(t) {
@@ -241,14 +332,42 @@
   }
   function onHostNet(net) {
     host.net = net;
-    if (net === "online" && host.dirty) publishNow();
+    if (net === "online") {
+      if (host.dirty) publishNow();
+      pollSeats();
+    }
     renderHost();
+  }
+
+  // Équipes connectées : demandé au serveur toutes les 5 s (script 003)
+  function pollSeats() {
+    if (!host.room || host.seatsOff) return;
+    var room = host.room;
+    rpc("host_seats", { p_code: room.code, p_token: room.token }).then(function (s) {
+      if (host.room !== room || !s) return;
+      var seats = { ketchup: !!s.ketchup, mayo: !!s.mayo };
+      if (host.seats && host.seats.ketchup && host.seats.mayo && !(seats.ketchup && seats.mayo)) host.qrOpen = false;
+      host.seats = seats;
+      renderHost();
+    }).catch(function (e) {
+      if (host.room !== room) return;
+      if (!isNetError(e)) { host.seatsOff = true; host.seats = null; renderHost(); } // script 003 pas lancé
+    });
+  }
+  function startSeats() {
+    clearInterval(host.seatsTimer);
+    host.seats = null;
+    host.seatsOff = false;
+    host.qrOpen = false;
+    host.seatsTimer = setInterval(pollSeats, 5000);
+    pollSeats();
   }
 
   function connectHost() {
     if (host.link) host.link.stop();
     host.net = "connecting";
     host.link = RoomLink(host.room.code, onHostRow, onHostNet);
+    startSeats();
     clearTimeout(host.expiry);
     host.expiry = setTimeout(function () {
       roomGone("La salle a expiré (12 h). Vous pouvez en ouvrir une nouvelle.");
@@ -275,7 +394,7 @@
       connectHost();
       publishNow();
     }).catch(function () {
-      note("Impossible de joindre le serveur des buzzers. Vérifiez la connexion et réessayez. Le compteur continue en local, et le buzzer écran partagé marche sans réseau.", true);
+      note("Impossible de joindre le serveur des buzzers. Vérifiez la connexion et réessayez. Si rien n'a servi depuis une semaine, le projet Supabase gratuit est peut-être en pause : ouvrez-le sur supabase.com et cliquez sur « Restore ». Le compteur continue en local.", true);
     }).then(function () { els.start.disabled = false; renderHost(); });
   }
 
@@ -291,7 +410,7 @@
     }).catch(function () {
       if (host.room !== room) return;
       M.toast("Pas de réseau");
-      host.link.kick();
+      host.link.lost();
     });
   }
   function unlock() {
@@ -317,11 +436,13 @@
     if (host.link) host.link.stop();
     clearTimeout(host.expiry);
     clearTimeout(host.timer);
+    clearInterval(host.seatsTimer);
     host.link = null;
     host.room = null;
     host.row = null;
     host.net = "off";
     host.dirty = false;
+    host.seats = null;
     writeJson(HOST_KEY, null);
     hideHit();
   }
@@ -353,7 +474,7 @@
     }).catch(function () {
       if (host.room !== room) return;
       host.dirty = true; // renvoyé dès que la connexion revient
-      host.link.kick();
+      host.link.lost();
     });
   }
   document.addEventListener("miams:save", schedulePublish);
@@ -362,20 +483,21 @@
   function openPanel() {
     renderHost();
     els.overlay.classList.add("open");
-    setTimeout(function () { (host.room ? els.unlock.disabled ? $("buzzClose") : els.unlock : els.start).focus(); }, 50);
+    setTimeout(function () { (host.room ? (els.action.hidden ? $("buzzClose") : els.action) : els.start).focus(); }, 50);
   }
   function closePanel() {
     els.overlay.classList.remove("open");
-    if (!els.note.classList.contains("err")) return;
-    note("");
+    if (els.note.classList.contains("err")) note("");
   }
 
   els.btn.addEventListener("click", openPanel);
   $("buzzClose").addEventListener("click", closePanel);
   els.overlay.addEventListener("click", function (e) { if (e.target === els.overlay) closePanel(); });
   els.start.addEventListener("click", activate);
-  els.unlock.addEventListener("click", unlock);
-  els.toggle.addEventListener("click", toggleEnabled);
+  els.action.addEventListener("click", function () { var a = actionFor(hostSituation()); if (a) a.run(); });
+  els.unfold.addEventListener("click", function () { host.qrOpen = true; renderHost(); });
+  els.fold.addEventListener("click", function () { host.qrOpen = false; renderHost(); });
+  $("buzzBarInfo").addEventListener("click", openPanel);
   $("buzzStop").addEventListener("click", stopHost);
   $("hitUnlock").addEventListener("click", unlock);
 
