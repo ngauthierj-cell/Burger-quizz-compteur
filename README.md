@@ -38,18 +38,31 @@ Après une modification publiée, l'appli installée télécharge la nouvelle ve
 
 ### Côté présentateur
 
-Le bouton **buzzer** (en haut à droite, touche **B**) ouvre le panneau :
+Le bouton **buzzer** (en haut à droite, touche **B**) ouvre la fenêtre des buzzers.
 
 - **Activer les buzzers** : crée une salle avec un code de 4 lettres et un QR code.
   Les joueurs scannent le QR code (ou tapent le code) et choisissent Ketchup ou Mayo.
   **Un seul appareil par équipe** : un 2e téléphone sur la même équipe est refusé.
   La place se libère avec « Quitter », ou toute seule après une minute sans
   nouvelles du téléphone (éteint, sans réseau).
-- Au premier buzz, l'équipe qui a la main s'affiche en grand (sans son : c'est le
+- La fenêtre montre quelles équipes sont **connectées**. Dès que les deux sont là,
+  le QR code se replie (« Afficher le QR » pour le revoir).
+- Un seul bouton, selon la situation : **Mettre en pause** (ex. pendant les Menus),
+  **Débloquer les buzzers** quand une équipe a la main, **Réactiver** après une pause.
+- Pendant la partie, un **bandeau** sous la manche montre le code, les équipes
+  connectées et l'état des buzzers, avec le même bouton : pas besoin d'ouvrir la fenêtre.
+- Au premier buzz, l'équipe qui a la main s'affiche en plein écran (sans son : c'est le
   téléphone qui a buzzé qui fait « Aïe ! », à la voix de son équipe).
-  Tous les buzzers sont verrouillés jusqu'à **Débloquer les buzzers** (touche **B**).
-- **Mettre en pause** : coupe les buzzers, par exemple pendant les Menus.
-- **Désactiver le mode** : ferme la salle. On continue en local, sans rien perdre.
+- **Désactiver le mode** (lien en bas de la fenêtre) : ferme la salle. On continue
+  en local, sans rien perdre.
+
+C'est le **serveur** qui décide qui a buzzé en premier, jamais l'horloge des téléphones.
+Après chaque changement de score, le présentateur publie le récap dans la salle :
+les joueurs le consultent dans l'onglet **Récap**, sans pouvoir rien modifier.
+
+Si la connexion tombe, le bandeau le signale. Le compteur continue en local, les
+téléphones se reconnectent tout seuls et le récap est republié au retour du réseau.
+Une salle expire au bout de 12 h.
 
 ### Côté joueurs
 
@@ -60,21 +73,14 @@ Sur **Rejoindre en tant que buzzer** : taper le code (ou scanner le QR code), pu
   - Avec le code : il buzze dans la salle, et c'est le présentateur qui débloque.
   - Sans code : secours sans réseau, tout se passe sur ce téléphone (bouton **Débloquer**).
 
-C'est le **serveur** qui décide qui a buzzé en premier, jamais l'horloge des téléphones.
-Après chaque changement de score, le présentateur publie le récap dans la salle :
-les joueurs le consultent dans l'onglet **Récap**, sans pouvoir rien modifier.
-
-Si la connexion tombe, un bandeau le signale. Le compteur continue en local, les
-téléphones se reconnectent tout seuls et le récap est republié au retour du réseau.
-Une salle expire au bout de 12 h.
-
 ### Configurer Supabase (une seule fois)
 
 1. **Créer le projet** : sur [supabase.com](https://supabase.com), créer un compte puis
    **New project** (l'offre gratuite suffit). Choisir une région proche (ex. Paris).
 2. **Créer les tables** : dans le projet, menu **SQL Editor → New query**, coller tout
    le contenu de `supabase/migrations/001_buzzers.sql`, puis **Run**. Recommencer
-   ensuite avec `supabase/migrations/002_un_appareil_par_equipe.sql` (dans cet ordre).
+   ensuite avec `supabase/migrations/002_un_appareil_par_equipe.sql`, puis
+   `supabase/migrations/003_equipes_connectees.sql` (dans cet ordre).
    Le script crée la table des salles, les fonctions (dont le buzz), la sécurité (RLS)
    et active le temps réel. On peut le relancer sans risque.
 3. **Vérifier le temps réel** : menu **Database → Publications → supabase_realtime** :
@@ -85,7 +91,10 @@ Une salle expire au bout de 12 h.
 
    ⚠️ Ne jamais utiliser la clé **service_role** ni une clé **secret** : elles donnent
    tous les droits. Le script de configuration les refuse de toute façon.
-5. **Facultatif, ménage automatique** : **Database → Extensions → pg_cron**, puis lancer
+5. **Bon à savoir** : un projet Supabase gratuit se met en pause après 7 jours sans
+   utilisation. Les buzzers affichent alors « Impossible de joindre le serveur » :
+   ouvrir le projet sur supabase.com et cliquer sur **Restore project**.
+6. **Facultatif, ménage automatique** : **Database → Extensions → pg_cron**, puis lancer
    la requête indiquée en bas du fichier SQL. Sans ça, les salles expirées sont quand
    même invisibles, et supprimées à chaque nouvelle salle.
 
@@ -125,5 +134,6 @@ python3 -m http.server 8000   # ouvrir http://localhost:8000
 - `vendor/supabase.js` : la bibliothèque Supabase (licence MIT), chargée seulement en mode buzzers connectés.
 - `supabase/migrations/001_buzzers.sql` : tables, fonctions, sécurité et temps réel.
 - `supabase/migrations/002_un_appareil_par_equipe.sql` : un seul appareil buzzer par équipe.
+- `supabase/migrations/003_equipes_connectees.sql` : le présentateur voit les équipes connectées.
 - `scripts/make-config.sh`, `.env.example`, `config.example.js` : configuration Supabase.
 - `.github/workflows/pages.yml` : publication sur GitHub Pages.
