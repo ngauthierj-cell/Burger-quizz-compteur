@@ -2,7 +2,7 @@
 
 Compteur de points pour un quiz entre amis, équipes Ketchup et Mayo : manches, Burger de la Mort, récap, sons. Un seul fichier `index.html`, sans dépendance, qui marche hors ligne.
 
-En option, des **buzzers** : sur les téléphones des joueurs (via Supabase), ou sur l'écran du présentateur coupé en deux (sans réseau). Sans eux, l'appli marche exactement comme avant.
+En option, des **buzzers** sur les téléphones des joueurs : un téléphone par joueur (via Supabase), ou un seul téléphone coupé en deux pour les deux équipes (avec ou sans réseau). Sans eux, l'appli marche exactement comme avant.
 
 ## Installer l'appli sur un téléphone
 
@@ -47,8 +47,15 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre le panneau :
   Tous les buzzers sont verrouillés jusqu'à **Débloquer les buzzers** (touche **B**).
 - **Mettre en pause** : coupe les buzzers, par exemple pendant les Menus.
 - **Désactiver le mode** : ferme la salle. On continue en local, sans rien perdre.
-- **Buzzer écran partagé** : l'écran de cet appareil est coupé en deux (Ketchup, Mayo).
-  Le premier qui touche a la main, jusqu'au déblocage. Aucun réseau requis.
+
+### Côté joueurs
+
+Sur **Rejoindre en tant que buzzer** : taper le code (ou scanner le QR code), puis
+- **Ketchup** ou **Mayo** : un gros bouton à la couleur de l'équipe, et l'onglet **Récap** ;
+- **Les deux équipes sur ce téléphone** : un seul téléphone posé entre les équipes,
+  écran coupé en deux. Le premier qui touche a la main.
+  - Avec le code : il buzze dans la salle, et c'est le présentateur qui débloque.
+  - Sans code : secours sans réseau, tout se passe sur ce téléphone (bouton **Débloquer**).
 
 C'est le **serveur** qui décide qui a buzzé en premier, jamais l'horloge des téléphones.
 Après chaque changement de score, le présentateur publie le récap dans la salle :
@@ -109,7 +116,7 @@ python3 -m http.server 8000   # ouvrir http://localhost:8000
 - `index.html` : l'appli complète (sons et polices intégrés).
 - `manifest.webmanifest`, `icons/` : nom, couleurs et icônes pour l'installation.
 - `sw.js` : garde l'appli en mémoire pour qu'elle marche hors ligne.
-- `buzzers.js` : le mode buzzers (salle en ligne, écran buzzer, écran partagé).
+- `buzzers.js` : le mode buzzers (salle en ligne, écran buzzer, écran partagé des joueurs).
 - `qr.js` : petit générateur de QR code, sans dépendance.
 - `vendor/supabase.js` : la bibliothèque Supabase (licence MIT), chargée seulement en mode buzzers connectés.
 - `supabase/migrations/001_buzzers.sql` : tables, fonctions, sécurité et temps réel.

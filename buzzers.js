@@ -253,7 +253,7 @@
   function activate() {
     note("");
     if (!CONFIGURED) {
-      note("Les buzzers connectés ne sont pas configurés sur cette appli (voir le README). Le buzzer écran partagé marche sans réseau.", true);
+      note("Les buzzers connectés ne sont pas configurés sur cette appli (voir le README). Les joueurs peuvent quand même utiliser l'écran partagé, sans réseau.", true);
       return;
     }
     els.start.disabled = true;
@@ -388,45 +388,117 @@
     publishNow();
   }
 
-  /* ================= Buzzer écran partagé (sans réseau) ================= */
-  var shared = { el: $("shared"), hand: null };
+  /* ================= Buzzer écran partagé (côté joueurs) =================
+     Un seul téléphone posé entre les deux équipes, écran coupé en deux.
+     - Avec le code d'une salle : chaque moitié buzze dans la salle, le serveur
+       tranche et c'est le présentateur qui débloque.
+     - Sans code : tout se passe sur ce téléphone, aucun réseau requis. */
+  var sh = { el: $("shared"), code: "", row: null, link: null, net: "connecting", pending: false, hand: null };
+  function sharedOnline() { return !!sh.code; }
+  function sharedState() {
+    if (!sharedOnline()) return sh.hand ? "hand" : "ready";
+    var row = sh.row;
+    if (!row) return "wait";
+    if (sh.net === "offline") return "offline";
+    if (!row.buzzers_enabled) return "paused";
+    if (team(row.buzzed_team)) return "hand";
+    return sh.pending ? "pending" : "ready";
+  }
   function renderShared() {
-    if (shared.hand) shared.el.setAttribute("data-hand", shared.hand);
-    else shared.el.removeAttribute("data-hand");
+    var st = sharedState();
+    var hand = !sharedOnline() ? sh.hand : (sh.row && team(sh.row.buzzed_team));
+    if (st === "hand" && hand) sh.el.setAttribute("data-hand", hand); else sh.el.removeAttribute("data-hand");
+    if (st === "wait" || st === "offline" || st === "paused") sh.el.setAttribute("data-off", ""); else sh.el.removeAttribute("data-off");
     ["ketchup", "mayo"].forEach(function (t) {
-      $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent =
-        !shared.hand ? "Touchez pour buzzer" : (shared.hand === t ? "À vous !" : "Trop tard");
+      $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent = {
+        wait: "Connexion…",
+        offline: "Hors ligne · reconnexion…",
+        paused: "Buzzers en pause",
+        pending: "…",
+        ready: "Touchez pour buzzer",
+        hand: hand === t ? "À vous !" : "Trop tard"
+      }[st];
+    });
+    $("sharedUnlock").hidden = sharedOnline(); // en salle, c'est le présentateur qui débloque
+    $("sharedInfo").hidden = !sharedOnline();
+    if (sharedOnline()) {
+      $("sharedCode").textContent = sh.code;
+      setNet($("sharedNet"), sh.net === "online" ? "online" : (sh.net === "offline" ? "offline" : "connecting"),
+        sh.net === "online" ? "En ligne" : (sh.net === "offline" ? "Hors ligne" : "Connexion…"));
+    }
+  }
+  function openShared(code, row) {
+    stopShared();
+    sh.code = code || "";
+    sh.row = null;
+    sh.hand = null;
+    sh.pending = false;
+    sh.net = "connecting";
+    sh.el.hidden = false;
+    if (code) {
+      onSharedRow(row);
+      sh.link = RoomLink(code, onSharedRow, function (net) { sh.net = net; renderShared(); });
+    }
+    renderShared();
+  }
+  function stopShared() {
+    if (sh.link) sh.link.stop();
+    sh.link = null;
+  }
+  function closeShared() {
+    stopShared();
+    sh.el.hidden = true;
+  }
+  function onSharedRow(row) {
+    if (sh.el.hidden || !sh.code) return;
+    if (!row || row.closed) {
+      closeShared();
+      showJoin("La salle a été fermée par le présentateur, ou a expiré.", true);
+      return;
+    }
+    if (sh.row && Date.parse(row.updated_at) < Date.parse(sh.row.updated_at)) return;
+    if (!sh.row || sh.row.question !== row.question) sh.pending = false;
+    sh.row = row;
+    renderShared();
+  }
+  function sharedPress(t) {
+    var st = sharedState();
+    if (st !== "ready") return; // verrouillé jusqu'au déblocage
+    if (!sharedOnline()) {
+      sh.hand = t;
+      renderShared();
+      M.buzzSound(t);
+      return;
+    }
+    var code = sh.code, q = sh.row.question;
+    sh.pending = true;
+    renderShared();
+    rpc("buzz", { p_code: code, p_team: t, p_question: q }).then(function (won) {
+      if (sh.code !== code) return;
+      if (won && sh.row && sh.row.question === q) sh.row = Object.assign({}, sh.row, { buzzed_team: t });
+      sh.pending = false;
+      renderShared();
+      if (sh.link) sh.link.refresh();
+    }).catch(function () {
+      if (sh.code !== code) return;
+      sh.pending = false;
+      sh.net = "offline";
+      renderShared();
+      if (sh.link) sh.link.kick();
     });
   }
-  function openShared() {
-    closePanel();
-    shared.hand = null;
-    renderShared();
-    shared.el.hidden = false;
-  }
-  function closeShared() { shared.el.hidden = true; }
-  Array.prototype.forEach.call(shared.el.querySelectorAll(".shared-half"), function (half) {
+  Array.prototype.forEach.call(sh.el.querySelectorAll(".shared-half"), function (half) {
     half.addEventListener("pointerdown", function (e) {
       e.preventDefault();
-      if (shared.hand) return; // verrouillé jusqu'au déblocage
-      shared.hand = half.getAttribute("data-hand");
-      renderShared();
-      M.buzzSound(shared.hand);
+      sharedPress(half.getAttribute("data-hand"));
     });
   });
-  $("sharedUnlock").addEventListener("click", function () { shared.hand = null; renderShared(); M.blip(); });
-  $("sharedQuit").addEventListener("click", closeShared);
-  $("sharedStart").addEventListener("click", openShared);
-  $("sharedStart2").addEventListener("click", openShared);
+  $("sharedUnlock").addEventListener("click", function () { sh.hand = null; renderShared(); M.blip(); });
+  $("sharedQuit").addEventListener("click", function () { closeShared(); showJoin(""); });
 
-  // Clavier côté présentateur (B = buzzers, Échap = fermer, Espace = débloquer)
+  // Clavier côté présentateur (B = buzzers ou débloquer, Échap = fermer)
   M.keyHook = function (e) {
     var k = e.key;
-    if (!shared.el.hidden) {
-      if (k === "Escape") closeShared();
-      else if (k === " " || k === "Enter") { e.preventDefault(); shared.hand = null; renderShared(); }
-      return true;
-    }
     if (!els.hit.hidden) {
       if (k === "Escape") hideHit();
       else if (k.toLowerCase() === "b") unlock();
@@ -466,11 +538,19 @@
     clearTimeout(bz.expiry);
   }
 
+  // t = "ketchup" | "mayo", ou "both" pour l'écran partagé
   function join(t) {
     var code = cleanCode(B.input.value);
     B.input.value = code;
+    if (t === "both" && !code) { openShared("", null); return; } // sans code : sans réseau
     if (code.length !== 4) { B.msg.textContent = "Le code de la salle fait 4 lettres."; B.msg.style.color = ""; B.input.focus(); return; }
-    if (!CONFIGURED) { B.msg.textContent = "Les buzzers connectés ne sont pas configurés sur cette appli."; B.msg.style.color = ""; return; }
+    if (!CONFIGURED) {
+      B.msg.textContent = t === "both"
+        ? "Buzzers connectés non configurés : effacez le code pour jouer sans réseau."
+        : "Les buzzers connectés ne sont pas configurés sur cette appli.";
+      B.msg.style.color = "";
+      return;
+    }
     B.input.blur();
     B.msg.textContent = "Connexion…";
     B.msg.style.color = "var(--creme)";
@@ -482,14 +562,18 @@
         return;
       }
       writeJson(BUZZER_KEY, { code: code, team: t });
-      startPlay(code, t, row);
+      if (t === "both") openShared(code, row);
+      else startPlay(code, t, row);
     }).catch(function () {
-      B.msg.textContent = "Serveur injoignable. Vérifiez votre connexion et réessayez.";
+      B.msg.textContent = t === "both"
+        ? "Serveur injoignable. Pour jouer sans réseau, effacez le code puis touchez « Les deux équipes »."
+        : "Serveur injoignable. Vérifiez votre connexion et réessayez.";
       B.msg.style.color = "";
     }).then(function () { setJoinBusy(false); });
   }
   function setJoinBusy(busy) {
     Array.prototype.forEach.call(B.join.querySelectorAll("[data-join]"), function (b) { b.disabled = busy; });
+    $("bzShared").disabled = busy;
   }
 
   function startPlay(code, t, row) {
@@ -659,6 +743,7 @@
   Array.prototype.forEach.call(B.join.querySelectorAll("[data-join]"), function (b) {
     b.addEventListener("click", function () { join(b.getAttribute("data-join")); });
   });
+  $("bzShared").addEventListener("click", function () { join("both"); });
   $("bzBack").addEventListener("click", function () {
     stopBuzzer();
     B.app.hidden = true;
@@ -678,7 +763,7 @@
       renderHost();
     } else if (e.detail === "buzzer") {
       showJoin("");
-      if (!CONFIGURED) B.msg.textContent = "Les buzzers connectés ne sont pas configurés sur cette appli.";
+      if (!CONFIGURED) B.msg.textContent = "Buzzers connectés non configurés : utilisez « Les deux équipes sur ce téléphone », sans code.";
     }
   });
 

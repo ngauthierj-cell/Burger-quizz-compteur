@@ -970,6 +970,11 @@
   .bz-team.m { background: var(--jaune); color: var(--noir); box-shadow: 0 6px 0 var(--jaune-fonce); }
   .bz-team:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.4); }
   .bz-team:disabled { opacity: .5; }
+  .bz-both { border: 0; border-radius: 16px; padding: clamp(14px, 3vmin, 24px) 24px; font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 3.2vmin, 28px); letter-spacing: .04em; text-transform: uppercase; color: var(--noir);
+    background: var(--creme); box-shadow: inset 14px 0 0 var(--rouge), inset -14px 0 0 var(--jaune), 0 6px 0 var(--brun); }
+  .bz-both small { display: block; font-family: var(--typo); font-weight: 400; font-size: .55em; text-transform: none; letter-spacing: 0; margin-top: .3em; color: var(--brun); }
+  .bz-both:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--brun); }
+  .bz-both:disabled { opacity: .5; }
   .bz-msg { font-family: var(--typo); font-size: clamp(15px, 2.6vmin, 24px); color: var(--jaune); min-height: 1.3em; margin: 0; }
 
   .bz-play {
@@ -1029,6 +1034,12 @@
   .shared-bar { flex: none; display: flex; gap: 10px; padding: 10px max(10px, env(safe-area-inset-left)); background: var(--noir); }
   .shared-bar button { flex: 1; border: 0; border-radius: 12px; padding: 14px; font-family: var(--cond); font-weight: 700; font-size: clamp(16px, 3vmin, 28px); text-transform: uppercase; letter-spacing: .05em; }
   .shared-unlock { background: var(--creme); color: var(--noir); box-shadow: 0 4px 0 #c4b38d; }
+  .shared-unlock[hidden] { display: none; }
+  .shared-info { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--creme); }
+  .shared-info[hidden] { display: none; }
+  .shared-info b { font-family: var(--slab); font-weight: 400; font-size: clamp(20px, 4vmin, 34px); letter-spacing: .12em; color: var(--jaune); }
+  .shared-info .net-status { font-size: clamp(12px, 2vmin, 18px); }
+  .shared[data-off] .shared-half { filter: grayscale(.85) brightness(.5); }
   .shared-quit { flex: 0 1 auto !important; background: transparent; color: var(--creme); border: 2px solid var(--creme) !important; }
   @media (orientation: landscape) {
     .shared { flex-direction: row; }
@@ -1229,6 +1240,7 @@
       <button class="bz-team k" data-join="ketchup">Ketchup</button>
       <button class="bz-team m" data-join="mayo">Mayo</button>
     </div>
+    <button class="bz-both" id="bzShared">Les deux équipes sur ce téléphone<small>Écran coupé en deux · sans code : marche sans réseau</small></button>
     <p class="bz-msg" id="bzJoinMsg" role="status" aria-live="polite"></p>
     <button class="welcome-new" id="bzBack">Retour</button>
   </div>
@@ -1255,11 +1267,11 @@
   <div class="card buzz-card">
     <h2 id="buzzTitle">Buzzers</h2>
     <div id="buzzOff">
-      <p>Chaque équipe buzze depuis ses téléphones. Les scores restent sur cet appareil.</p>
+      <p>Chaque équipe buzze depuis ses téléphones (ou un seul téléphone coupé en deux). Les scores restent sur cet appareil.</p>
       <div class="actions col">
         <button class="btn-main" id="buzzStart">Activer les buzzers</button>
-        <button class="btn-alt" id="sharedStart">Buzzer écran partagé<br><small>sans réseau, sur cet appareil</small></button>
       </div>
+      <p class="buzz-note">Pas de réseau&nbsp;? Sur le téléphone des joueurs&nbsp;: «&nbsp;Rejoindre en tant que buzzer&nbsp;», puis «&nbsp;Les deux équipes sur ce téléphone&nbsp;», sans code.</p>
     </div>
     <div id="buzzOn" hidden>
       <div class="net-status" id="buzzNet" data-net="connecting"><i></i><span>Connexion…</span></div>
@@ -1276,7 +1288,6 @@
         <button class="btn-alt" id="buzzToggle">Mettre en pause</button>
       </div>
       <div class="actions">
-        <button class="btn-alt" id="sharedStart2">Écran partagé</button>
         <button class="btn-alt" id="buzzStop">Désactiver le mode</button>
       </div>
     </div>
@@ -1306,6 +1317,7 @@
     <div class="shared-msg" id="sharedMsgK">Touchez pour buzzer</div>
   </div>
   <div class="shared-bar">
+    <div class="shared-info" id="sharedInfo" hidden><b id="sharedCode"></b><div class="net-status" id="sharedNet" data-net="connecting"><i></i><span>Connexion…</span></div></div>
     <button class="shared-unlock" id="sharedUnlock">Débloquer</button>
     <button class="shared-quit" id="sharedQuit">Quitter</button>
   </div>
