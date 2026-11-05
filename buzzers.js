@@ -386,6 +386,67 @@
     publishNow();
   }
 
+  /* ================= Une place par équipe =================
+     Chaque appareil buzzer réserve la place de son équipe dans la salle (les
+     deux pour l'écran partagé) et la confirme toutes les 20 s. Le serveur
+     refuse un 2e appareil sur une même équipe ; une place non confirmée depuis
+     60 s (téléphone éteint, parti) se libère toute seule. */
+  function newId() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* ignore */ }
+    var b = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+    else for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+    b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    var h = Array.prototype.map.call(b, function (x) { return (x + 256).toString(16).slice(1); }).join("");
+    return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+  }
+  // Identifiant aléatoire de cet appareil (aucune donnée personnelle)
+  var DEVICE = (function () {
+    var KEY = "compteur-miams-appareil", id = null;
+    try { id = window.localStorage.getItem(KEY); } catch (e) { /* ignore */ }
+    if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+      id = newId();
+      try { window.localStorage.setItem(KEY, id); } catch (e) { /* ignore */ }
+    }
+    return id;
+  })();
+  var seat = { code: "", teams: null, timer: null };
+  function claimSeats(code, teams) {
+    return rpc("claim_seats", { p_code: code, p_teams: teams, p_device: DEVICE });
+  }
+  function takenText(teams) {
+    return teams.length > 1
+      ? "Une équipe a déjà un buzzer dans cette salle : l'écran partagé a besoin des deux places. Un seul appareil par équipe."
+      : TEAMS[teams[0]] + " a déjà un buzzer dans cette salle. Un seul appareil par équipe ! (Si c'était votre téléphone, réessayez dans une minute.)";
+  }
+  function holdSeats(code, teams) {
+    clearInterval(seat.timer);
+    seat = { code: code, teams: teams, timer: setInterval(beat, 20000) };
+  }
+  function beat() {
+    if (!seat.code) return;
+    var code = seat.code, teams = seat.teams;
+    claimSeats(code, teams).then(function (res) {
+      if (seat.code !== code) return;
+      if (res === "taken") lostSeats(teams); // un autre appareil a pris la place pendant une coupure
+      // "no_room" : le temps réel s'occupe d'annoncer la fermeture
+    }).catch(function () { /* hors ligne : on réessaiera */ });
+  }
+  function releaseSeats() {
+    clearInterval(seat.timer);
+    if (!seat.code) return;
+    var code = seat.code;
+    seat = { code: "", teams: null, timer: null };
+    rpc("release_seats", { p_code: code, p_device: DEVICE }).catch(function () { /* elle expirera seule */ });
+  }
+  function lostSeats(teams) {
+    clearInterval(seat.timer);
+    seat = { code: "", teams: null, timer: null };
+    closeShared();
+    showJoin(takenText(teams), true);
+  }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") beat(); });
+
   /* ================= Buzzer écran partagé (côté joueurs) =================
      Un seul téléphone posé entre les deux équipes, écran coupé en deux.
      - Avec le code d'une salle : chaque moitié buzze dans la salle, le serveur
@@ -435,12 +496,13 @@
     sh.el.hidden = false;
     if (code) {
       onSharedRow(row);
-      sh.link = RoomLink(code, onSharedRow, function (net) { sh.net = net; renderShared(); });
+      holdSeats(code, ["ketchup", "mayo"]);
+      sh.link = RoomLink(code, onSharedRow, function (net) { sh.net = net; renderShared(); if (net === "online") beat(); });
     }
     renderShared();
   }
   function stopShared() {
-    if (sh.link) sh.link.stop();
+    if (sh.link) { sh.link.stop(); releaseSeats(); }
     sh.link = null;
   }
   function closeShared() {
@@ -472,12 +534,12 @@
     M.warmAudio();
     sh.pending = true;
     renderShared();
-    rpc("buzz", { p_code: code, p_team: t, p_question: q }).then(function (won) {
+    rpc("buzz", { p_code: code, p_team: t, p_question: q, p_device: DEVICE }).then(function (won) {
       if (sh.code !== code) return;
       if (won && sh.row && sh.row.question === q) {
         sh.row = Object.assign({}, sh.row, { buzzed_team: t });
         M.buzzSound(t);
-      }
+      } else if (!won) beat(); // place perdue ? on vérifie tout de suite
       sh.pending = false;
       renderShared();
       if (sh.link) sh.link.refresh();
@@ -535,7 +597,7 @@
     if (!B.input.value && saved.code) B.input.value = cleanCode(saved.code);
   }
   function stopBuzzer() {
-    if (bz.link) bz.link.stop();
+    if (bz.link) { bz.link.stop(); releaseSeats(); }
     bz.link = null;
     clearTimeout(bz.expiry);
   }
@@ -563,9 +625,14 @@
         B.msg.style.color = "";
         return;
       }
-      writeJson(BUZZER_KEY, { code: code, team: t });
-      if (t === "both") openShared(code, row);
-      else startPlay(code, t, row);
+      var teams = t === "both" ? ["ketchup", "mayo"] : [t];
+      return claimSeats(code, teams).then(function (res) {
+        if (res === "taken") { B.msg.textContent = takenText(teams); B.msg.style.color = ""; return; }
+        if (res !== "ok") { B.msg.textContent = "Salle introuvable ou expirée. Vérifiez le code auprès du présentateur."; B.msg.style.color = ""; return; }
+        writeJson(BUZZER_KEY, { code: code, team: t });
+        if (t === "both") openShared(code, row);
+        else startPlay(code, t, row);
+      });
     }).catch(function () {
       B.msg.textContent = t === "both"
         ? "Serveur injoignable. Pour jouer sans réseau, effacez le code puis touchez « Les deux équipes »."
@@ -595,7 +662,8 @@
     B.room.appendChild(document.createTextNode(" · " + TEAMS[t]));
     setTab("buzz");
     onBuzzerRow(row);
-    bz.link = RoomLink(code, onBuzzerRow, function (net) { bz.net = net; renderBuzzer(); });
+    holdSeats(code, [t]);
+    bz.link = RoomLink(code, onBuzzerRow, function (net) { bz.net = net; renderBuzzer(); if (net === "online") beat(); });
   }
 
   function onBuzzerRow(row) {
@@ -650,7 +718,8 @@
     M.warmAudio();
     bz.pending = true;
     renderBuzzer();
-    rpc("buzz", { p_code: code, p_team: t, p_question: row.question }).then(function (won) {
+    rpc("buzz", { p_code: code, p_team: t, p_question: row.question, p_device: DEVICE }).then(function (won) {
+      if (!won) beat(); // place perdue ? on vérifie tout de suite
       if (bz.code !== code) return;
       if (won && bz.row && bz.row.question === row.question) {
         // Le serveur a donné la main à ce buzzer : on l'affiche sans attendre le temps réel

@@ -42,7 +42,9 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre le panneau :
 
 - **Activer les buzzers** : crée une salle avec un code de 4 lettres et un QR code.
   Les joueurs scannent le QR code (ou tapent le code) et choisissent Ketchup ou Mayo.
-  Une équipe peut avoir plusieurs téléphones.
+  **Un seul appareil par équipe** : un 2e téléphone sur la même équipe est refusé.
+  La place se libère avec « Quitter », ou toute seule après une minute sans
+  nouvelles du téléphone (éteint, sans réseau).
 - Au premier buzz, l'équipe qui a la main s'affiche en grand (sans son : c'est le
   téléphone qui a buzzé qui fait « Aïe ! », à la voix de son équipe).
   Tous les buzzers sont verrouillés jusqu'à **Débloquer les buzzers** (touche **B**).
@@ -71,7 +73,8 @@ Une salle expire au bout de 12 h.
 1. **Créer le projet** : sur [supabase.com](https://supabase.com), créer un compte puis
    **New project** (l'offre gratuite suffit). Choisir une région proche (ex. Paris).
 2. **Créer les tables** : dans le projet, menu **SQL Editor → New query**, coller tout
-   le contenu de `supabase/migrations/001_buzzers.sql`, puis **Run**.
+   le contenu de `supabase/migrations/001_buzzers.sql`, puis **Run**. Recommencer
+   ensuite avec `supabase/migrations/002_un_appareil_par_equipe.sql` (dans cet ordre).
    Le script crée la table des salles, les fonctions (dont le buzz), la sécurité (RLS)
    et active le temps réel. On peut le relancer sans risque.
 3. **Vérifier le temps réel** : menu **Database → Publications → supabase_realtime** :
@@ -121,5 +124,6 @@ python3 -m http.server 8000   # ouvrir http://localhost:8000
 - `qr.js` : petit générateur de QR code, sans dépendance.
 - `vendor/supabase.js` : la bibliothèque Supabase (licence MIT), chargée seulement en mode buzzers connectés.
 - `supabase/migrations/001_buzzers.sql` : tables, fonctions, sécurité et temps réel.
+- `supabase/migrations/002_un_appareil_par_equipe.sql` : un seul appareil buzzer par équipe.
 - `scripts/make-config.sh`, `.env.example`, `config.example.js` : configuration Supabase.
 - `.github/workflows/pages.yml` : publication sur GitHub Pages.
