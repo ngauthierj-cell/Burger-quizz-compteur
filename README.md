@@ -55,6 +55,8 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre la fenêtre des buz
   téléphone qui a buzzé qui fait « Aïe ! », à la voix de son équipe).
 - **Désactiver le mode** (lien en bas de la fenêtre) : ferme la salle. On continue
   en local, sans rien perdre.
+- **Nouvelle partie** ferme aussi la salle : les téléphones buzzers sont déconnectés.
+  Le mode reste éteint jusqu'à « Activer les buzzers » (nouveau code).
 
 C'est le **serveur** qui décide qui a buzzé en premier, jamais l'horloge des téléphones.
 Après chaque changement de score, le présentateur publie le récap dans la salle :
