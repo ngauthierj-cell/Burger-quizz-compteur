@@ -295,7 +295,7 @@
     els.barTxt.textContent = {
       hand: who ? TEAMS[who] + " a la main !" : "",
       paused: "Buzzers en pause",
-      waiting: "Attente " + missingText(),
+      waiting: "En attente",
       ready: "Buzzers prêts",
       offline: "Hors ligne · reconnexion…",
       connecting: "Connexion…"
@@ -386,7 +386,7 @@
     rpc("create_room").then(function (data) {
       var r = Array.isArray(data) ? data[0] : data;
       if (!r || !r.code || !r.host_token) throw new Error("salle");
-      host.room = { code: r.code, token: r.host_token, expiresAt: Date.parse(r.expires_at) || Date.now() + 12 * 3600 * 1000, lastHit: "" };
+      host.room = { code: r.code, token: r.host_token, expiresAt: Date.parse(r.expires_at) || Date.now() + 12 * 3600 * 1000, lastHit: "", seenAt: Date.now() };
       host.lastHit = "";
       host.published = "";
       writeJson(HOST_KEY, host.room);
@@ -503,6 +503,33 @@
   els.fold.addEventListener("click", function () { host.qrOpen = false; renderHost(); });
   $("buzzBarInfo").addEventListener("click", openPanel);
   $("buzzStop").addEventListener("click", function () { stopHost(); });
+
+  /* Salle laissée sans présentateur : si l'appli reste fermée (ou en arrière-plan)
+     plus de 10 min alors que la partie n'a pas commencé, la salle est fermée.
+     Pendant une partie en cours, on la garde : l'écran « Une partie vous
+     attend » propose de continuer, et « Nouvelle partie » la fermera. */
+  var IDLE_MS = 10 * 60 * 1000;
+  function idleTooLong(room) { return !room.seenAt || Date.now() - room.seenAt > IDLE_MS; }
+  function touchRoom() {
+    if (!host.room || document.visibilityState !== "visible") return;
+    host.room.seenAt = Date.now();
+    writeJson(HOST_KEY, host.room);
+  }
+  setInterval(touchRoom, 30000);
+  document.addEventListener("visibilitychange", function () {
+    if (!host.room) return;
+    if (document.visibilityState === "hidden") {
+      host.room.seenAt = Date.now();
+      writeJson(HOST_KEY, host.room);
+    } else if (M.mode() === "host" && idleTooLong(host.room) && !M.gameInProgress()) {
+      stopHost();
+    } else {
+      touchRoom();
+    }
+  });
+  window.addEventListener("pagehide", function () {
+    if (host.room && document.visibilityState === "visible") { host.room.seenAt = Date.now(); writeJson(HOST_KEY, host.room); }
+  });
   $("hitUnlock").addEventListener("click", unlock);
 
   // Reprise d'une salle encore valide après un rechargement de la page
@@ -513,7 +540,15 @@
       writeJson(HOST_KEY, null);
       return;
     }
+    // Appli fermée plus de 10 min alors que la partie n'a pas commencé :
+    // on ne reprend pas la salle, on la ferme.
+    if (idleTooLong(saved) && !M.gameInProgress()) {
+      rpc("host_close", { p_code: saved.code, p_token: saved.token }).catch(function () { /* elle expirera d'elle-même */ });
+      writeJson(HOST_KEY, null);
+      return;
+    }
     host.room = saved;
+    host.room.seenAt = Date.now();
     host.lastHit = saved.lastHit || "";
     connectHost();
     publishNow();

@@ -57,6 +57,8 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre la fenêtre des buz
   en local, sans rien perdre.
 - **Nouvelle partie** ferme aussi la salle : les téléphones buzzers sont déconnectés.
   Le mode reste éteint jusqu'à « Activer les buzzers » (nouveau code).
+- Si l'appli du présentateur est fermée **plus de 10 minutes** alors que la partie
+  n'a pas commencé, la salle est fermée. Pendant une partie en cours, elle est gardée.
 
 C'est le **serveur** qui décide qui a buzzé en premier, jamais l'horloge des téléphones.
 Après chaque changement de score, le présentateur publie le récap dans la salle :
