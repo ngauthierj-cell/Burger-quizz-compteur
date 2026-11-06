@@ -141,3 +141,5 @@ python3 -m http.server 8000   # ouvrir http://localhost:8000
 - `supabase/migrations/003_equipes_connectees.sql` : le présentateur voit les équipes connectées.
 - `scripts/make-config.sh`, `.env.example`, `config.example.js` : configuration Supabase.
 - `.github/workflows/pages.yml` : publication sur GitHub Pages.
+- `tests/e2e/` : tests automatiques dans le navigateur (voir son README).
+- `CLAUDE.md` : compte rendu technique pour reprendre le développement.
