@@ -423,15 +423,19 @@
       M.toast(enabled ? "Buzzers en pause" : "Buzzers actifs");
     });
   }
-  function stopHost() {
+  function stopHost(silent) {
     if (!host.room) return;
     var room = host.room;
     rpc("host_close", { p_code: room.code, p_token: room.token }).catch(function () { /* elle expirera d'elle-même */ });
     clearRoom();
     note("");
     renderHost();
-    M.toast("Buzzers coupés");
+    if (silent !== true) M.toast("Buzzers coupés");
   }
+  // Nouvelle partie : la salle est fermée, les téléphones buzzers sont renvoyés
+  // sur l'écran « Rejoindre ». Le mode reste éteint jusqu'à ce que le
+  // présentateur rouvre une salle (nouveau code).
+  document.addEventListener("miams:newgame", function () { stopHost(true); });
   function clearRoom() {
     if (host.link) host.link.stop();
     clearTimeout(host.expiry);
@@ -498,7 +502,7 @@
   els.unfold.addEventListener("click", function () { host.qrOpen = true; renderHost(); });
   els.fold.addEventListener("click", function () { host.qrOpen = false; renderHost(); });
   $("buzzBarInfo").addEventListener("click", openPanel);
-  $("buzzStop").addEventListener("click", stopHost);
+  $("buzzStop").addEventListener("click", function () { stopHost(); });
   $("hitUnlock").addEventListener("click", unlock);
 
   // Reprise d'une salle encore valide après un rechargement de la page

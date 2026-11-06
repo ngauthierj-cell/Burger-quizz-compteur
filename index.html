@@ -2099,6 +2099,8 @@
     resetGame();
     fryer();
     toast("C'est reparti\u00a0!");
+    // Nouvelle partie : le mode buzzers (s'il est actif) ferme sa salle
+    try { document.dispatchEvent(new CustomEvent("miams:newgame")); } catch (e) { /* ignore */ }
   }
 
   /* ---------- Écran d'accueil : reprendre ou recommencer ----------
