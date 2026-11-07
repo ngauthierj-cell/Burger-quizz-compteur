@@ -49,6 +49,12 @@ Le bouton **buzzer** (en haut à droite, touche **B**) ouvre la fenêtre des buz
   le QR code se replie (« Afficher le QR » pour le revoir).
 - Un seul bouton, selon la situation : **Mettre en pause** (ex. pendant les Menus),
   **Débloquer les buzzers** quand une équipe a la main, **Réactiver** après une pause.
+- **Tester les buzzers** (sous le bouton principal) : mode test pour que les joueurs
+  essaient leurs buzzers sans que le présentateur ait à débloquer. Chaque buzz s'affiche
+  un instant (« Mayo a buzzé ! », sans plein écran), puis les buzzers se débloquent tout
+  seuls. La fenêtre coche les équipes dont le buzz est bien arrivé (Ketchup ✓ · Mayo ✓),
+  et les téléphones affichent « Mode test ». **Terminer le test** (fenêtre ou bandeau)
+  repart sur une question vierge : la partie continue normalement.
 - Pendant la partie, un **bandeau** sous la manche montre le code, les équipes
   connectées et l'état des buzzers, avec le même bouton : pas besoin d'ouvrir la fenêtre.
 - Au premier buzz, l'équipe qui a la main s'affiche en plein écran (sans son : c'est le

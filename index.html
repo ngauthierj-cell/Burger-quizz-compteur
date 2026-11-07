@@ -942,6 +942,10 @@
   .buzz-action { display: block; width: 100%; border: 0; border-radius: 12px; padding: clamp(14px, 2.4vmin, 20px); font-family: var(--cond); font-weight: 700; font-size: clamp(18px, 3vmin, 26px); text-transform: uppercase; letter-spacing: .05em; background: var(--creme-2); color: var(--noir); box-shadow: 0 5px 0 #c4b38d; }
   .buzz-action.main { background: var(--rouge); color: var(--creme); box-shadow: 0 5px 0 var(--rouge-fonce); padding-block: clamp(18px, 3vmin, 26px); }
   .buzz-action:active { transform: translateY(3px); }
+  .buzz-action[hidden] { display: none; }
+  .buzz-test { margin-top: 12px; background: transparent; box-shadow: inset 0 0 0 3px var(--creme-2); }
+  .buzz-bar.test { box-shadow: inset 0 0 0 2px var(--jaune); }
+  .bz-test { display: inline-block; margin-bottom: .3em; padding: .1em .6em; border-radius: 8px; background: var(--jaune); color: var(--noir); font-family: var(--cond); font-weight: 700; font-size: .7em; letter-spacing: .08em; text-transform: uppercase; }
   .buzz-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; font-family: var(--typo); font-size: clamp(12px, 1.8vmin, 15px); color: var(--brun); text-align: left; }
 
   /* Bandeau des buzzers, sous la manche */
@@ -1343,6 +1347,7 @@
       </div>
       <div class="buzz-state" id="buzzState" aria-live="polite"></div>
       <button class="buzz-action" id="buzzAction"></button>
+      <button class="buzz-action buzz-test" id="buzzTest" hidden>Tester les buzzers</button>
       <div class="buzz-foot">
         <span id="buzzExpire"></span>
         <button class="buzz-link" id="buzzStop">Désactiver le mode</button>

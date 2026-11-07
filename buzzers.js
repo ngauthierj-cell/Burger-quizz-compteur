@@ -170,7 +170,10 @@
     room: null, row: null, link: null, net: "off", lastHit: "", published: "", dirty: false, timer: null, expiry: null,
     seats: null,          // { ketchup: bool, mayo: bool }, null tant qu'on ne sait pas
     seatsTimer: null, seatsOff: false, // seatsOff : script 003 absent, on n'affiche pas les pastilles
-    qrOpen: false         // QR redéplié à la main alors que les deux équipes sont là
+    qrOpen: false,        // QR redéplié à la main alors que les deux équipes sont là
+    tested: { ketchup: false, mayo: false }, // mode test : équipes dont le buzz est arrivé
+    testHit: null,        // mode test : dernière équipe qui a buzzé (affichée un instant)
+    testTimer: null       // mode test : déblocage automatique après un buzz
   };
   var els = {
     btn: $("buzzersBtn"), overlay: $("buzzOverlay"), off: $("buzzOff"), on: $("buzzOn"), note: $("buzzNote"),
@@ -178,7 +181,7 @@
     invite: $("buzzInvite"), fold: $("buzzFold"), unfold: $("buzzUnfold"), codeSmall: $("buzzCodeSmall"),
     seats: $("buzzSeats"), seatK: $("seatK"), seatM: $("seatM"), expire: $("buzzExpire"),
     bar: $("buzzBar"), barCode: $("buzzBarCode"), barDots: $("buzzBarDots"), barTxt: $("buzzBarTxt"), barBtn: $("buzzBarBtn"),
-    hit: $("buzzHit"), hitTeam: $("hitTeam")
+    hit: $("buzzHit"), hitTeam: $("hitTeam"), test: $("buzzTest")
   };
 
   function note(text, isErr) {
@@ -199,6 +202,7 @@
     if (!host.room) return "off";
     if (host.net === "offline") return "offline";
     if (!row) return "connecting";
+    if (host.room.test) return "test";
     if (team(row.buzzed_team)) return "hand";
     if (!row.buzzers_enabled) return "paused";
     if (host.seats && !(host.seats.ketchup && host.seats.mayo)) return "waiting";
@@ -212,7 +216,7 @@
 
   function renderHost() {
     var room = host.room, row = host.row, sit = hostSituation();
-    var who = row && team(row.buzzed_team);
+    var who = sit === "test" ? null : row && team(row.buzzed_team);
     els.off.hidden = !!room;
     els.on.hidden = !room;
     els.net.hidden = !room;
@@ -251,9 +255,11 @@
     }
 
     // Un seul bouton, selon la situation
-    els.state.className = "buzz-state" + (who ? (who === "ketchup" ? " k" : " m") : "");
+    var tint = who || (sit === "test" && host.testHit);
+    els.state.className = "buzz-state" + (tint ? (tint === "ketchup" ? " k" : " m") : "");
     els.state.innerHTML = "";
     var line = {
+      test: host.testHit ? TEAMS[host.testHit] + " a buzzé !" : "Mode test des buzzers",
       hand: who ? TEAMS[who] + " a la main !" : "",
       paused: "Buzzers en pause",
       waiting: "En attente " + missingText() + "…",
@@ -263,6 +269,7 @@
     }[sit];
     els.state.appendChild(document.createTextNode(line));
     var sub = sit === "ready" ? "en attente d'un buzz" : (sit === "offline" ? "reconnexion automatique, le compteur continue en local" : "");
+    if (sit === "test") sub = "Les joueurs buzzent librement, déblocage automatique. " + testedText();
     if (sub) { var sm = document.createElement("small"); sm.textContent = sub; els.state.appendChild(sm); }
     var act = actionFor(sit);
     els.action.hidden = !act;
@@ -270,11 +277,14 @@
       els.action.textContent = act.long;
       els.action.className = "buzz-action" + (act.main ? " main" : "");
     }
+    // Mode test : proposé tant qu'aucune équipe n'a la main
+    els.test.hidden = !(sit === "ready" || sit === "waiting" || sit === "paused");
     els.expire.textContent = "Valable jusqu'à " + timeText(room.expiresAt);
   }
 
   // Action principale : la même dans la fenêtre et dans le bandeau
   function actionFor(sit) {
+    if (sit === "test") return { long: "Terminer le test", short: "Fin du test", main: true, run: stopTest };
     if (sit === "hand") return { long: "Débloquer les buzzers", short: "Débloquer", main: true, run: unlock };
     if (sit === "paused") return { long: "Réactiver les buzzers", short: "Reprendre", main: true, run: toggleEnabled };
     if (sit === "ready" || sit === "waiting") return { long: "Mettre en pause", short: "Pause", main: false, run: toggleEnabled };
@@ -285,7 +295,8 @@
     var room = host.room;
     els.bar.hidden = !room;
     if (!room) return;
-    els.bar.className = "buzz-bar" + (sit === "offline" ? " off" : "") + (who ? " hand-" + who : "");
+    var tint = who || (sit === "test" && host.testHit);
+    els.bar.className = "buzz-bar" + (sit === "offline" ? " off" : "") + (tint ? " hand-" + tint : "") + (sit === "test" ? " test" : "");
     els.barCode.textContent = room.code;
     els.barDots.hidden = !host.seats || sit === "hand";
     if (host.seats) {
@@ -293,6 +304,7 @@
       els.barDots.children[1].classList.toggle("on", !!host.seats.mayo);
     }
     els.barTxt.textContent = {
+      test: host.testHit ? "Test · " + TEAMS[host.testHit] + " !" : "Test des buzzers",
       hand: who ? TEAMS[who] + " a la main !" : "",
       paused: "Buzzers en pause",
       waiting: "En attente",
@@ -317,6 +329,7 @@
     if (!row || row.closed) { roomGone("La salle n'existe plus (expirée ou fermée). Vous pouvez en ouvrir une nouvelle."); return; }
     host.row = row;
     var who = team(row.buzzed_team);
+    if (host.room.test) { onTestRow(row, who); renderHost(); return; }
     if (who) {
       var key = row.question + ":" + who;
       if (key !== host.lastHit) {
@@ -423,6 +436,64 @@
       M.toast(enabled ? "Buzzers en pause" : "Buzzers actifs");
     });
   }
+
+  /* Mode test : les joueurs essaient leurs buzzers sans que le présentateur
+     ait à débloquer. Chaque buzz est affiché un instant (sans plein écran),
+     puis la salle se débloque toute seule. Le mode est annoncé aux téléphones
+     dans le récap publié (champ « test »), sans changer la base. */
+  var TEST_UNLOCK_MS = 1500;
+  function testedText() {
+    return ["ketchup", "mayo"].map(function (t) {
+      return TEAMS[t] + (host.tested[t] ? " ✓" : " : pas encore");
+    }).join(" · ");
+  }
+  function onTestRow(row, who) {
+    hideHit();
+    if (!who) { clearTimeout(host.testTimer); host.testTimer = null; return; }
+    var key = row.question + ":" + who;
+    if (key !== host.lastHit) {
+      host.lastHit = key;
+      host.tested[who] = true;
+      host.testHit = who;
+      clearTimeout(host.testTimer);
+      host.testTimer = null;
+    }
+    if (host.testTimer) return; // déblocage déjà prévu (sinon : on réessaie, ex. après une coupure)
+    var room = host.room;
+    host.testTimer = setTimeout(function () {
+      host.testTimer = null;
+      if (host.room !== room || !room.test) return;
+      host.testHit = null;
+      hostAction("host_unlock");
+      renderHost();
+    }, TEST_UNLOCK_MS);
+  }
+  function startTest() {
+    if (!host.room || host.room.test) return;
+    host.room.test = true;
+    host.tested = { ketchup: false, mayo: false };
+    host.testHit = null;
+    writeJson(HOST_KEY, host.room);
+    publishNow();
+    // Repart d'une question vierge, buzzers actifs
+    if (host.row && !host.row.buzzers_enabled) hostAction("host_set_enabled", { p_enabled: true });
+    else hostAction("host_unlock");
+    M.toast("Test des buzzers");
+    renderHost();
+  }
+  function stopTest() {
+    if (!host.room || !host.room.test) return;
+    host.room.test = false;
+    host.testHit = null;
+    clearTimeout(host.testTimer);
+    host.testTimer = null;
+    writeJson(HOST_KEY, host.room);
+    publishNow();
+    hostAction("host_unlock"); // la partie reprend sur une question vierge
+    M.toast("Fin du test");
+    renderHost();
+  }
+
   function stopHost(silent) {
     if (!host.room) return;
     var room = host.room;
@@ -441,6 +512,9 @@
     clearTimeout(host.expiry);
     clearTimeout(host.timer);
     clearInterval(host.seatsTimer);
+    clearTimeout(host.testTimer);
+    host.testTimer = null;
+    host.testHit = null;
     host.link = null;
     host.room = null;
     host.row = null;
@@ -467,6 +541,7 @@
   function publishNow() {
     if (!host.room) return;
     var snap = M.snapshot();
+    if (host.room.test) snap.test = true;
     var json = JSON.stringify(snap);
     if (json === host.published && !host.dirty) return;
     var room = host.room;
@@ -499,6 +574,7 @@
   els.overlay.addEventListener("click", function (e) { if (e.target === els.overlay) closePanel(); });
   els.start.addEventListener("click", activate);
   els.action.addEventListener("click", function () { var a = actionFor(hostSituation()); if (a) a.run(); });
+  els.test.addEventListener("click", startTest);
   els.unfold.addEventListener("click", function () { host.qrOpen = true; renderHost(); });
   els.fold.addEventListener("click", function () { host.qrOpen = false; renderHost(); });
   $("buzzBarInfo").addEventListener("click", openPanel);
@@ -550,6 +626,7 @@
     host.room = saved;
     host.room.seenAt = Date.now();
     host.lastHit = saved.lastHit || "";
+    host.tested = { ketchup: false, mayo: false };
     connectHost();
     publishNow();
   }
@@ -622,6 +699,8 @@
      - Sans code : tout se passe sur ce téléphone, aucun réseau requis. */
   var sh = { el: $("shared"), code: "", row: null, link: null, net: "connecting", pending: false, hand: null };
   function sharedOnline() { return !!sh.code; }
+  // Mode test annoncé par le présentateur dans le récap publié
+  function isTest(row) { return !!(row && row.recap && row.recap.test === true); }
   function sharedState() {
     if (!sharedOnline()) return sh.hand ? "hand" : "ready";
     var row = sh.row;
@@ -651,6 +730,11 @@
         ready: "Touchez pour buzzer",
         hand: hand === t ? "À vous !" : "Trop tard"
       }[st];
+      if (sharedOnline() && isTest(sh.row) && (st === "ready" || st === "hand")) {
+        $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent = st === "ready"
+          ? "Test : touchez pour essayer"
+          : (hand === t ? "Test : ça marche !" : "Test : trop tard");
+      }
       if (sharedNotice.text && st === "ready") $(t === "ketchup" ? "sharedMsgK" : "sharedMsgM").textContent = sharedNotice.text;
     });
     $("sharedUnlock").hidden = sharedOnline(); // en salle, c'est le présentateur qui débloque
@@ -890,6 +974,18 @@
       pending: "…",
       ready: "Au premier qui buzze !"
     }[st];
+    if (isTest(bz.row) && (st === "ready" || st === "mine" || st === "late")) {
+      B.state.textContent = {
+        ready: "Essayez votre buzzer !",
+        mine: "Ça marche ! Le buzzer se débloque tout seul.",
+        late: (who ? TEAMS[who] : "L'autre équipe") + " a été plus rapide. Réessayez !"
+      }[st];
+      var badge = document.createElement("span");
+      badge.className = "bz-test";
+      badge.textContent = "Mode test";
+      B.state.insertBefore(document.createElement("br"), B.state.firstChild);
+      B.state.insertBefore(badge, B.state.firstChild);
+    }
     if (buzzerNotice.text && st === "ready") B.state.textContent = buzzerNotice.text;
     setNet(B.net, bz.net === "online" ? "online" : (bz.net === "offline" ? "offline" : "connecting"),
       bz.net === "online" ? "En ligne" : (bz.net === "offline" ? "Hors ligne" : "Connexion…"));
